@@ -238,10 +238,6 @@ def _render_active_summary() -> bool:
         st.info("Active dataset is empty.")
         return False
 
-    st.subheader("Preview")
-    preview_df = dataset.drop(columns=["image_path", "label_path"], errors="ignore")
-    st.dataframe(preview_df, use_container_width=True)
-
     st.subheader("Column summary")
     summary = entry.summary.get("tables", {})
     if not summary:

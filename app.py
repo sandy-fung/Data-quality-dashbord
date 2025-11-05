@@ -9,6 +9,7 @@ import streamlit as st
 from core import datasets as ds_state
 from core.data_manager import data_manager
 from ui_pages.data_source import render_data_source_page
+from ui_pages.dataset_preview import render_dataset_preview_page
 from ui_pages.analysis_runs import render_analysis_runs_page
 from ui_pages.trends import render_trends_page
 from ui_pages.text_analysis import render_text_analysis_page
@@ -63,7 +64,7 @@ def render_sidebar() -> str:
 
         st.divider()
 
-        pages = ["📁 Data Source", "🚨 Error Overview", "📈 Trends"]
+        pages = ["📁 Data Source", "📋 Dataset Preview", "🚨 Error Overview", "📈 Trends"]
         if entry and entry.ground_truth and entry.label_runs:
             pages.append("📝 Text Analysis")
 
@@ -160,6 +161,8 @@ def main() -> None:
         changed = render_data_source_page()
         if changed:
             auto_save_if_needed()
+    elif page == "📋 Dataset Preview":
+        render_dataset_preview_page()
     elif page == "🚨 Error Overview":
         changed = render_analysis_runs_page()
         if changed:
