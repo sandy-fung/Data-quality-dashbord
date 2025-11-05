@@ -1,0 +1,31 @@
+[project]
+name = "json-quality-dashboard"
+version = "0.1.0"
+description = "Streamlit dashboard for JSON-based quality analytics"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "streamlit>=1.39.0",
+    "pandas>=2.2.0",
+    "numpy>=1.26.0",
+    "plotly>=5.24.0",
+    "pyarrow>=16.0.0",
+    "rapidfuzz>=3.14.3",
+    "pytest>=8.4.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "ruff>=0.8.0"
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+python_files = "test_*.py"
+

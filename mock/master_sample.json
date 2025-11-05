@@ -1,0 +1,41 @@
+[
+  {
+    "filename": "00240009_f000000_crop_00.jpg",
+    "width": 131,
+    "height": 65,
+    "plate_text": "EAF1279",
+    "features": {
+      "tilt_abs_deg": 1.0838735298320992,
+      "iou": 0.05508391896118527,
+      "brightness_mean": 123.98469543457031,
+      "brightness_std": 14.03691291809082,
+      "blurriness": 2.274898286908865
+    }
+  },
+  {
+    "filename": "08200007_f001574_crop_00.jpg",
+    "width": 79,
+    "height": 54,
+    "plate_text": "BEP1611",
+    "features": {
+      "tilt_abs_deg": 1.2837819377857351,
+      "iou": 0.10439615095965099,
+      "brightness_mean": 103.74678039550781,
+      "brightness_std": 72.41773986816406,
+      "blurriness": 9.063156127696857
+    }
+  },
+  {
+    "filename": "08200007_f001609_crop_00.jpg",
+    "width": 149,
+    "height": 78,
+    "plate_text": "BEP1611",
+    "features": {
+      "tilt_abs_deg": 2.1184050018113814,
+      "iou": 0.056975990430244615,
+      "brightness_mean": 141.56753540039062,
+      "brightness_std": 80.1800765991211,
+      "blurriness": 36.34052935033105
+    }
+  }
+]

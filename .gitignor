@@ -1,0 +1,51 @@
+# Python bytecode & cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+env/
+venv/
+
+# Test cache and coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Data / Temporary files
+data/
+outputs/
+mock/
+
+# Streamlit / UI state files
+.streamlit/
+.ui_cache/
+*.db
+
+# IDE / Editor
+.vscode/
+.idea/
+
+# Packaging
+build/
+dist/
+*.egg-info/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Lock / dependency management files (if auto-generated locally)
+uv.lock
+
+# Logs
+*.log
+logs/
+
+# Security
+*.pem
+*.key
+secrets.*
+.env
