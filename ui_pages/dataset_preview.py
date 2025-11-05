@@ -43,7 +43,7 @@ def _render_dataset_preview(entry) -> None:
         return
 
     # Display basic information
-    col1, col2, col3, col4, col5 = st.columns(5)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.metric("Rows", len(dataset))
     with col2:
@@ -52,10 +52,6 @@ def _render_dataset_preview(entry) -> None:
         st.metric("Ground-truth entries", len(entry.ground_truth))
     with col4:
         st.metric("Label runs", len(entry.label_runs))
-    with col5:
-        # Count how many rows are marked as wrong
-        wrong_count = dataset["is_wrong"].sum() if "is_wrong" in dataset.columns else 0
-        st.metric("Errors", int(wrong_count))
 
     with st.expander("Dataset details", expanded=False):
         st.caption(f"**Created at:** {entry.created_at}")
@@ -66,6 +62,12 @@ def _render_dataset_preview(entry) -> None:
 
     # Display data preview
     st.subheader("Data Preview")
+
+    # Ensure is_wrong column exists in the dataset
+    if "is_wrong" not in dataset.columns:
+        # If is_wrong doesn't exist, create it and initialize to False
+        from core import datasets as ds_state
+        ds_state.update_is_wrong_column(entry)
 
     # Add filter option for showing only errors
     show_filter = "is_wrong" in dataset.columns and dataset["is_wrong"].sum() > 0
@@ -83,6 +85,17 @@ def _render_dataset_preview(entry) -> None:
 
     # Remove technical columns for better readability
     preview_df = dataset.drop(columns=["image_path", "label_path"], errors="ignore")
+
+    # Reorder columns: put is_wrong right after filename
+    if "filename" in preview_df.columns and "is_wrong" in preview_df.columns:
+        # Get all other columns except filename and is_wrong
+        other_cols = [col for col in preview_df.columns if col not in ["filename", "is_wrong"]]
+        # Reorder: filename, is_wrong, then others
+        preview_df = preview_df[["filename", "is_wrong"] + other_cols]
+    elif "is_wrong" in preview_df.columns:
+        # If no filename column, put is_wrong first
+        other_cols = [col for col in preview_df.columns if col != "is_wrong"]
+        preview_df = preview_df[["is_wrong"] + other_cols]
 
     # Apply filter if needed
     if show_only_errors and "is_wrong" in preview_df.columns:
