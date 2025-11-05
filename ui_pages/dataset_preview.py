@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import streamlit as st
+from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode
 
 from core import datasets as ds_state
 
@@ -66,22 +67,7 @@ def _render_dataset_preview(entry) -> None:
     # Ensure is_wrong column exists in the dataset
     if "is_wrong" not in dataset.columns:
         # If is_wrong doesn't exist, create it and initialize to False
-        from core import datasets as ds_state
         ds_state.update_is_wrong_column(entry)
-
-    # Add filter option for showing only errors
-    show_filter = "is_wrong" in dataset.columns and dataset["is_wrong"].sum() > 0
-    if show_filter:
-        col_filter, col_spacer = st.columns([1, 3])
-        with col_filter:
-            show_only_errors = st.checkbox(
-                "Show only errors",
-                value=False,
-                key=f"show_errors_{entry.id}",
-                help="Display only rows marked as wrong (is_wrong=True)",
-            )
-    else:
-        show_only_errors = False
 
     # Remove technical columns for better readability
     preview_df = dataset.drop(columns=["image_path", "label_path"], errors="ignore")
@@ -97,21 +83,84 @@ def _render_dataset_preview(entry) -> None:
         other_cols = [col for col in preview_df.columns if col != "is_wrong"]
         preview_df = preview_df[["is_wrong"] + other_cols]
 
-    # Apply filter if needed
-    if show_only_errors and "is_wrong" in preview_df.columns:
-        preview_df = preview_df[preview_df["is_wrong"] == True]
-        if preview_df.empty:
-            st.info("No errors found in this dataset.")
-            return
+    # Configure AgGrid options
+    gb = GridOptionsBuilder.from_dataframe(preview_df)
 
-    # Display the dataframe
-    st.dataframe(
-        preview_df,
-        use_container_width=True,
-        height=400,  # Fixed height for consistent display
+    # Global column configuration
+    gb.configure_default_column(
+        filterable=True,        # Enable filtering
+        sortable=True,          # Enable sorting
+        resizable=True,         # Allow column resizing
+        editable=False,         # Read-only
     )
 
-    # Optional: Show column info
-    caption_parts = [f"Displaying {len(preview_df)} rows, {len(preview_df.columns)} columns."]
-    caption_parts.append("Hidden: image_path, label_path")
-    st.caption(" ".join(caption_parts))
+    # Special configuration for is_wrong column
+    if "is_wrong" in preview_df.columns:
+        gb.configure_column(
+            "is_wrong",
+            header_name="Error",
+            filter="agSetColumnFilter",  # Checkbox filter for boolean
+            width=100,
+        )
+
+    # Pin filename column to the left
+    if "filename" in preview_df.columns:
+        gb.configure_column(
+            "filename",
+            header_name="Filename",
+            filter="agTextColumnFilter",
+            pinned="left",
+            width=200,
+        )
+
+    # Configure numeric columns with number filter
+    for col in preview_df.columns:
+        if preview_df[col].dtype in ['int64', 'float64']:
+            gb.configure_column(
+                col,
+                filter="agNumberColumnFilter",  # Number filter with range support
+                type=["numericColumn"],
+            )
+
+    # Enable pagination
+    gb.configure_pagination(
+        enabled=True,
+        paginationAutoPageSize=False,
+        paginationPageSize=50,
+    )
+
+    # Enable side bar for advanced filtering
+    gb.configure_side_bar(
+        filters_panel=True,
+        columns_panel=True,
+    )
+
+    # Enable selection
+    gb.configure_selection(
+        selection_mode='multiple',
+        use_checkbox=True,
+    )
+
+    grid_options = gb.build()
+
+    # Display AgGrid
+    st.caption("💡 Tip: Click column headers to filter and sort. Use the sidebar (☰) for advanced filters.")
+
+    grid_response = AgGrid(
+        preview_df,
+        gridOptions=grid_options,
+        height=400,
+        width='100%',
+        data_return_mode=DataReturnMode.FILTERED_AND_SORTED,
+        update_mode=GridUpdateMode.SELECTION_CHANGED,
+        fit_columns_on_grid_load=False,
+        theme='streamlit',
+        allow_unsafe_jscode=True,
+    )
+
+    # Show info about filtered data
+    filtered_df = grid_response['data']
+    if len(filtered_df) < len(preview_df):
+        st.info(f"Showing {len(filtered_df)} of {len(preview_df)} rows (filtered).")
+    else:
+        st.caption(f"Displaying {len(preview_df)} rows, {len(preview_df.columns)} columns. Hidden: image_path, label_path")

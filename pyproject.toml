@@ -12,6 +12,7 @@ dependencies = [
     "pyarrow>=16.0.0",
     "rapidfuzz>=3.14.3",
     "pytest>=8.4.2",
+    "streamlit-aggrid>=1.0.5",
 ]
 
 [project.optional-dependencies]
