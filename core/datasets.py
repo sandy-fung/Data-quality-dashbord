@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
@@ -114,6 +115,10 @@ def create_dataset_entry(
         created_at=created_at or datetime.now().isoformat(),
         label_runs=label_runs or [],
     )
+
+    # Initialize is_wrong column
+    update_is_wrong_column(entry)
+
     st.session_state[DATASETS_KEY][dataset_id] = entry
     set_active_dataset(dataset_id)
     return entry
@@ -127,6 +132,11 @@ def update_dataset_entry(dataset_id: str, **updates: Any) -> None:
     for key, value in updates.items():
         if hasattr(entry, key):
             setattr(entry, key, value)
+
+    # Update is_wrong column when label_runs or dataset changes
+    if "label_runs" in updates or "dataset" in updates:
+        update_is_wrong_column(entry)
+
     if dataset_id == st.session_state.get(ACTIVE_DATASET_KEY):
         set_active_dataset(dataset_id)
 
@@ -185,3 +195,39 @@ def deduplicate_datasets() -> None:
             delete_dataset(entry.id)
         else:
             seen[key] = entry.id
+
+
+def update_is_wrong_column(entry: DatasetEntry) -> None:
+    """
+    Update the 'is_wrong' column in the dataset based on label_runs.
+
+    A row is marked as wrong (is_wrong=True) if its filename appears
+    in any label_run, indicating it was flagged as an error.
+    """
+    if entry is None or entry.dataset is None or entry.dataset.empty:
+        return
+
+    dataset = entry.dataset
+
+    # Collect all filenames from label_runs
+    wrong_filenames = set()
+    for run in entry.label_runs or []:
+        for label_record in run.get("labels", []):
+            # Store the basename (without extension) for matching
+            filename = label_record.get("filename", "")
+            if filename:
+                wrong_filenames.add(filename)
+
+    # Initialize or update is_wrong column
+    if "filename" in dataset.columns:
+        def is_filename_wrong(value) -> bool:
+            """Check if a filename is marked as wrong in any label run."""
+            if not isinstance(value, str) or not value:
+                return False
+            basename = Path(value).stem
+            return basename in wrong_filenames
+
+        dataset["is_wrong"] = dataset["filename"].apply(is_filename_wrong)
+    else:
+        # If no filename column, set all to False
+        dataset["is_wrong"] = False
