@@ -122,11 +122,9 @@ def _render_dataset_preview(entry) -> None:
                 type=["numericColumn"],
             )
 
-    # Enable pagination
+    # Disable pagination - show all rows
     gb.configure_pagination(
-        enabled=True,
-        paginationAutoPageSize=False,
-        paginationPageSize=50,
+        enabled=False,
     )
 
     # Enable side bar for advanced filtering
