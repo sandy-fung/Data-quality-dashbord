@@ -19,6 +19,33 @@ THUMBNAILS_PER_ROW = 5
 THUMBNAIL_MAX_SIZE = 160
 
 
+def _sort_replacement_tokens(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Sort replacement tokens by first character group, then by count.
+
+    This ensures same-color slices are adjacent in the pie chart.
+
+    Args:
+        df: DataFrame with 'token' and 'count' columns
+
+    Returns:
+        Sorted DataFrame
+    """
+    # Extract first character from token (e.g., "8>0" -> "8")
+    df = df.copy()
+    df["_first_char"] = df["token"].apply(
+        lambda x: x.split(">")[0] if ">" in x else x
+    )
+
+    # Sort by first character, then by count within each group (descending)
+    df = df.sort_values(
+        ["_first_char", "count"],
+        ascending=[True, False]
+    ).drop(columns=["_first_char"]).reset_index(drop=True)
+
+    return df
+
+
 def _generate_replacement_color_map(tokens: List[str]) -> Dict[str, str]:
     """
     Generate color map for replacement pairs, grouping by first character.
@@ -31,23 +58,24 @@ def _generate_replacement_color_map(tokens: List[str]) -> Dict[str, str]:
     Returns:
         Dictionary mapping each token to its color
     """
-    # Define a set of distinguishable base colors
+    # Define a set of highly distinguishable, vibrant base colors
+    # Using more saturated colors with better contrast
     base_colors = [
-        "#1f77b4",  # Blue
-        "#ff7f0e",  # Orange
-        "#2ca02c",  # Green
-        "#d62728",  # Red
-        "#9467bd",  # Purple
-        "#8c564b",  # Brown
-        "#e377c2",  # Pink
-        "#7f7f7f",  # Gray
-        "#bcbd22",  # Olive
-        "#17becf",  # Cyan
-        "#aec7e8",  # Light Blue
-        "#ffbb78",  # Light Orange
-        "#98df8a",  # Light Green
-        "#ff9896",  # Light Red
-        "#c5b0d5",  # Light Purple
+        "#FF6B6B",  # Bright Red
+        "#4ECDC4",  # Turquoise
+        "#45B7D1",  # Sky Blue
+        "#FFA07A",  # Light Salmon
+        "#98D8C8",  # Mint
+        "#F7DC6F",  # Yellow
+        "#BB8FCE",  # Lavender
+        "#85C1E2",  # Light Blue
+        "#F8B88B",  # Peach
+        "#52B788",  # Green
+        "#E07A5F",  # Terracotta
+        "#3D5A80",  # Navy
+        "#EE6C4D",  # Coral
+        "#F4A261",  # Sandy Brown
+        "#2A9D8F",  # Teal
     ]
 
     # Group tokens by first character
@@ -64,46 +92,61 @@ def _generate_replacement_color_map(tokens: List[str]) -> Dict[str, str]:
     for idx, (first_char, group_tokens) in enumerate(sorted(first_char_groups.items())):
         base_color = base_colors[idx % len(base_colors)]
 
-        # For each token in the group, assign a shade of the base color
+        # For each token in the group, assign a variation of the base color
         for token_idx, token in enumerate(sorted(group_tokens)):
             if len(group_tokens) == 1:
                 # Only one token in group, use base color
                 color_map[token] = base_color
             else:
-                # Multiple tokens, use different shades
-                # Lighten the color for subsequent tokens
-                shade_factor = token_idx / (len(group_tokens) - 1)
-                color_map[token] = _lighten_color(base_color, shade_factor * 0.4)
+                # Multiple tokens, use saturation + brightness variation
+                # This keeps colors more distinguishable than just lightening
+                variation_factor = token_idx / (len(group_tokens) - 1)
+                # Mix of lightening and desaturation for better visibility
+                color_map[token] = _vary_color(base_color, variation_factor)
 
     return color_map
 
 
-def _lighten_color(hex_color: str, amount: float) -> str:
+def _vary_color(hex_color: str, variation: float) -> str:
     """
-    Lighten a hex color by a given amount (0.0 to 1.0).
+    Create a color variation by adjusting both saturation and brightness.
+
+    This keeps colors more distinguishable than just lightening.
 
     Args:
-        hex_color: Hex color string (e.g., "#1f77b4")
-        amount: Amount to lighten (0.0 = no change, 1.0 = white)
+        hex_color: Hex color string (e.g., "#FF6B6B")
+        variation: Variation amount (0.0 = original, 1.0 = maximum variation)
 
     Returns:
-        Lightened hex color string
+        Varied hex color string
     """
+    import colorsys
+
     # Remove '#' if present
     hex_color = hex_color.lstrip('#')
 
-    # Convert hex to RGB
-    r = int(hex_color[0:2], 16)
-    g = int(hex_color[2:4], 16)
-    b = int(hex_color[4:6], 16)
+    # Convert hex to RGB (0-1 range)
+    r = int(hex_color[0:2], 16) / 255.0
+    g = int(hex_color[2:4], 16) / 255.0
+    b = int(hex_color[4:6], 16) / 255.0
 
-    # Lighten by moving towards white (255)
-    r = int(r + (255 - r) * amount)
-    g = int(g + (255 - g) * amount)
-    b = int(b + (255 - b) * amount)
+    # Convert to HSV
+    h, s, v = colorsys.rgb_to_hsv(r, g, b)
 
-    # Convert back to hex
-    return f"#{r:02x}{g:02x}{b:02x}"
+    # Adjust saturation and value (brightness)
+    # Decrease saturation and increase brightness for variations
+    s = s * (1.0 - variation * 0.5)  # Reduce saturation up to 50%
+    v = min(1.0, v + variation * 0.3)  # Increase brightness up to 30%
+
+    # Convert back to RGB
+    r, g, b = colorsys.hsv_to_rgb(h, s, v)
+
+    # Convert to hex
+    r_int = int(r * 255)
+    g_int = int(g * 255)
+    b_int = int(b * 255)
+
+    return f"#{r_int:02x}{g_int:02x}{b_int:02x}"
 
 
 def render_text_analysis_page() -> None:
@@ -277,8 +320,13 @@ def _render_text_analysis_for_entry(entry, key_suffix: str) -> bool:
                 filenames=("filename", lambda values: sorted(set(values))),
             )
             .reset_index()
-            .sort_values("count", ascending=False)
         )
+
+        # For replacement pairs, sort by first character to group same colors together
+        if error_type == "replace":
+            summary_df = _sort_replacement_tokens(summary_df)
+        else:
+            summary_df = summary_df.sort_values("count", ascending=False)
 
         # For replacement pairs, group by first character for better color organization
         if error_type == "replace":
