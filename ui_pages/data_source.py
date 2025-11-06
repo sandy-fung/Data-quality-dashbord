@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Tuple
@@ -11,6 +12,10 @@ import streamlit as st
 
 from core import datasets as ds_state
 from core import importers, text_analysis
+
+
+# Maximum number of paths to keep in history
+MAX_HISTORY_PATHS = 10
 
 
 def _format_scalar(value):
@@ -99,11 +104,57 @@ def _render_dataset_overview() -> bool:
 
 
 
+def _add_to_path_history(path_type: str, path: str) -> None:
+    """Add a path to history (image_dirs or label_dirs)."""
+    if not path or not path.strip():
+        return
+
+    key = f"path_history_{path_type}"
+    history = st.session_state.get(key, [])
+
+    # Remove if already exists (to move to front)
+    if path in history:
+        history.remove(path)
+
+    # Add to front
+    history.insert(0, path)
+
+    # Keep only last MAX_HISTORY_PATHS
+    st.session_state[key] = history[:MAX_HISTORY_PATHS]
+
+
+def _get_path_history(path_type: str) -> list:
+    """Get path history for a specific type."""
+    key = f"path_history_{path_type}"
+    return st.session_state.get(key, [])
+
+
 def _render_scan_form() -> bool:
-    """Render the form used to add a new dataset."""
+    """Render the form used to add a new dataset with tabs for different input methods."""
     st.subheader("Add dataset")
+
+    # Create tabs for different input methods
+    tab1, tab2 = st.tabs(["✏️ Manual Input", "📁 Upload JSON"])
+
+    changed = False
+
+    with tab1:
+        changed = _render_manual_input_tab() or changed
+
+    with tab2:
+        changed = _render_json_upload_tab() or changed
+
+    return changed
+
+
+def _render_manual_input_tab() -> bool:
+    """Render manual input tab with path history."""
     last_image_dir = st.session_state.get("last_image_dir", "")
     last_label_dir = st.session_state.get("last_label_dir", "")
+
+    # Get path history
+    image_history = _get_path_history("image_dirs")
+    label_history = _get_path_history("label_dirs")
 
     with st.form("dataset_scan_form"):
         dataset_name = st.text_input(
@@ -111,18 +162,67 @@ def _render_scan_form() -> bool:
             placeholder="e.g., Factory_Batch_2024_11",
             key="dataset_scan_name",
         )
-        image_dir = st.text_input(
-            "Image directory",
-            value=last_image_dir,
-            placeholder="D:/dataset/picked/test/images",
-            key="dataset_scan_images",
-        )
-        label_dir = st.text_input(
-            "Label directory (optional)",
-            value=last_label_dir,
-            placeholder="D:/dataset/picked/test/labels",
-            key="dataset_scan_labels",
-        )
+
+        # Image directory with history
+        if image_history:
+            st.caption("Recent image directories:")
+            image_dir_select = st.selectbox(
+                "Select from history or enter new path below",
+                options=["(Enter new path)"] + image_history,
+                key="image_dir_history",
+                label_visibility="collapsed",
+            )
+            if image_dir_select == "(Enter new path)":
+                image_dir = st.text_input(
+                    "Image directory",
+                    value=last_image_dir,
+                    placeholder="D:/dataset/picked/test/images",
+                    key="dataset_scan_images",
+                )
+            else:
+                image_dir = st.text_input(
+                    "Image directory",
+                    value=image_dir_select,
+                    key="dataset_scan_images_prefilled",
+                )
+        else:
+            image_dir = st.text_input(
+                "Image directory",
+                value=last_image_dir,
+                placeholder="D:/dataset/picked/test/images",
+                key="dataset_scan_images",
+            )
+
+        # Label directory with history
+        if label_history:
+            st.caption("Recent label directories:")
+            label_dir_select = st.selectbox(
+                "Select from history or enter new path below",
+                options=["(Enter new path)"] + label_history,
+                key="label_dir_history",
+                label_visibility="collapsed",
+            )
+            if label_dir_select == "(Enter new path)":
+                label_dir = st.text_input(
+                    "Label directory (optional)",
+                    value=last_label_dir,
+                    placeholder="D:/dataset/picked/test/labels",
+                    key="dataset_scan_labels",
+                )
+            else:
+                label_dir = st.text_input(
+                    "Label directory (optional)",
+                    value=label_dir_select,
+                    key="dataset_scan_labels_prefilled",
+                )
+        else:
+            label_dir = st.text_input(
+                "Label directory (optional)",
+                value=last_label_dir,
+                placeholder="D:/dataset/picked/test/labels",
+                key="dataset_scan_labels",
+            )
+
         submitted = st.form_submit_button("Scan folders", type="primary", use_container_width=True)
 
     if not submitted:
@@ -170,6 +270,12 @@ def _render_scan_form() -> bool:
         st.session_state["last_image_dir"] = image_dir
         if label_dir:
             st.session_state["last_label_dir"] = label_dir
+
+        # Add to path history
+        _add_to_path_history("image_dirs", image_dir)
+        if label_dir:
+            _add_to_path_history("label_dirs", label_dir)
+
         return True
 
     entry = ds_state.create_dataset_entry(
@@ -186,11 +292,168 @@ def _render_scan_form() -> bool:
     if label_dir:
         st.session_state["last_label_dir"] = label_dir
 
+    # Add to path history
+    _add_to_path_history("image_dirs", image_dir)
+    if label_dir:
+        _add_to_path_history("label_dirs", label_dir)
+
     st.success(
         f"Added dataset '{entry.name}' containing {len(df)} rows "
         f"and {len(entry.ground_truth)} ground-truth mappings."
     )
     return True
+
+
+def _render_json_upload_tab() -> bool:
+    """Render JSON upload tab for batch dataset import."""
+    st.markdown("📥 **Upload a JSON configuration file to batch import datasets**")
+    st.caption("Drag and drop your JSON file here, or click to browse")
+
+    uploaded_file = st.file_uploader(
+        "Upload JSON config",
+        type=["json"],
+        key="json_config_uploader",
+        label_visibility="collapsed",
+    )
+
+    if not uploaded_file:
+        # Show example format
+        st.info("**JSON Format Example:**")
+        example_config = {
+            "datasets": [
+                {
+                    "name": "Dataset_1",
+                    "image_dir": "D:/dataset/picked/test1/images",
+                    "label_dir": "D:/dataset/picked/test1/labels"
+                },
+                {
+                    "name": "Dataset_2",
+                    "image_dir": "D:/dataset/picked/test2/images",
+                    "label_dir": "D:/dataset/picked/test2/labels"
+                }
+            ]
+        }
+        st.json(example_config)
+
+        # Download example button
+        st.download_button(
+            label="📥 Download example config",
+            data=json.dumps(example_config, indent=2),
+            file_name="dataset_config_example.json",
+            mime="application/json",
+        )
+        return False
+
+    # Parse and process JSON file
+    try:
+        config_data = json.load(uploaded_file)
+    except json.JSONDecodeError as exc:
+        st.error(f"Invalid JSON format: {exc}")
+        return False
+
+    if "datasets" not in config_data or not isinstance(config_data["datasets"], list):
+        st.error("JSON must contain a 'datasets' array")
+        return False
+
+    datasets_config = config_data["datasets"]
+    if not datasets_config:
+        st.warning("No datasets found in configuration")
+        return False
+
+    st.info(f"Found {len(datasets_config)} dataset(s) in configuration")
+
+    # Show preview and confirm button
+    preview_df = pd.DataFrame(datasets_config)
+    st.dataframe(preview_df, use_container_width=True)
+
+    if st.button("Import all datasets", type="primary", use_container_width=True):
+        return _batch_import_datasets(datasets_config)
+
+    return False
+
+
+def _batch_import_datasets(datasets_config: list) -> bool:
+    """Batch import multiple datasets from configuration."""
+    success_count = 0
+    error_count = 0
+    errors = []
+
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+
+    for idx, dataset_config in enumerate(datasets_config):
+        status_text.text(f"Processing {idx + 1}/{len(datasets_config)}: {dataset_config.get('name', 'Unknown')}")
+
+        try:
+            # Validate required fields
+            if "image_dir" not in dataset_config:
+                raise ValueError("Missing required field: image_dir")
+
+            image_dir = dataset_config["image_dir"]
+            label_dir = dataset_config.get("label_dir")
+            dataset_name = dataset_config.get("name", Path(image_dir).name)
+
+            # Import dataset
+            df, summary = importers.prepare_dataset_from_directories(image_dir, label_dir)
+
+            ground_truth, resolved_label = _resolve_ground_truth(label_dir, df)
+            resolved_image = _resolve_path(image_dir) if image_dir else None
+
+            summary_payload = {
+                "columns": len(df.columns),
+                "rows": len(df),
+                "tables": summary,
+            }
+
+            # Check if dataset already exists
+            existing = ds_state.find_dataset_by_paths(resolved_image, resolved_label)
+            if existing:
+                ds_state.update_dataset_entry(
+                    existing.id,
+                    name=dataset_name,
+                    dataset=df,
+                    summary=summary_payload,
+                    image_dir=resolved_image,
+                    label_dir=resolved_label,
+                    ground_truth=ground_truth,
+                )
+            else:
+                ds_state.create_dataset_entry(
+                    name=dataset_name,
+                    dataset=df,
+                    summary=summary_payload,
+                    image_dir=resolved_image,
+                    label_dir=resolved_label,
+                    ground_truth=ground_truth,
+                )
+
+            # Add to path history
+            _add_to_path_history("image_dirs", image_dir)
+            if label_dir:
+                _add_to_path_history("label_dirs", label_dir)
+
+            success_count += 1
+
+        except Exception as exc:
+            error_count += 1
+            errors.append(f"{dataset_config.get('name', 'Unknown')}: {str(exc)}")
+
+        progress_bar.progress((idx + 1) / len(datasets_config))
+
+    progress_bar.empty()
+    status_text.empty()
+
+    # Show summary
+    if success_count > 0:
+        st.success(f"✅ Successfully imported {success_count} dataset(s)")
+
+    if error_count > 0:
+        st.error(f"❌ Failed to import {error_count} dataset(s)")
+        with st.expander("View errors"):
+            for error in errors:
+                st.text(error)
+
+    return success_count > 0
 
 
 def _resolve_ground_truth(label_dir: str | None, df: pd.DataFrame) -> Tuple[Dict[str, str], str | None]:
