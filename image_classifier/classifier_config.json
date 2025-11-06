@@ -1,0 +1,37 @@
+{
+  "version": "2.0",
+  "description": "Configuration for image quality classifier thresholds",
+  "thresholds": {
+    "brightness": {
+      "description": "Average pixel brightness value (0-255)",
+      "levels": {
+        "dark": [0, 70],
+        "medium": [70, 160],
+        "bright": [160, 255]
+      }
+    },
+    "brightness_median": {
+      "description": "Filtered median brightness value (0-255)",
+      "levels": {
+        "dark": [0, 70],
+        "medium": [70, 160],
+        "bright": [160, 255]
+      }
+    },
+    "contrast": {
+      "description": "Standard deviation of pixel brightness",
+      "levels": {
+        "low": [0, 20],
+        "medium": [20, 80],
+        "high": [80, 999]
+      }
+    },
+    "sharpness": {
+      "description": "Laplacian variance (higher = sharper)",
+      "levels": {
+        "blurry": [0, 6],
+        "sharp": [6, 999999]
+      }
+    }
+  }
+}
