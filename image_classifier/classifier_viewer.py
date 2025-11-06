@@ -188,6 +188,14 @@ def create_dataframe(results: List[Dict], thresholds: Dict[str, Any]) -> pd.Data
             thresholds['sharpness']['levels']
         )
 
+        # Calculate exposure classification based on histogram quartiles and filtered median
+        hist = calculate_image_histogram(result['path'])
+        if hist is not None:
+            quartiles = calculate_brightness_quartile_distribution(hist)
+            exposure_class = classify_exposure(quartiles, metrics['brightness_median_filtered'])
+        else:
+            exposure_class = None
+
         row = {
             'filename': result['filename'],
             'path': result['path'],
@@ -201,6 +209,7 @@ def create_dataframe(results: List[Dict], thresholds: Dict[str, Any]) -> pd.Data
             'brightness_median_class': brightness_median_class,
             'contrast_class': contrast_class,
             'sharpness_class': sharpness_class,
+            'exposure_class': exposure_class,
             'prediction': parse_yolo_prediction(result['path']),
         }
         rows.append(row)
@@ -220,7 +229,7 @@ def compute_statistics(df: pd.DataFrame) -> Dict[str, Dict[str, int]]:
     statistics = {}
 
     # Count classifications for each metric
-    for metric in ['brightness', 'brightness_median', 'contrast', 'sharpness']:
+    for metric in ['brightness', 'brightness_median', 'contrast', 'sharpness', 'exposure']:
         class_col = f'{metric}_class'
         if class_col in df.columns:
             counts = df[class_col].value_counts().to_dict()
@@ -233,12 +242,13 @@ def plot_statistics(statistics: Dict[str, Dict[str, int]]) -> go.Figure:
     """Create bar chart showing classification distribution."""
     fig = go.Figure()
 
-    metrics = ['brightness', 'brightness_median', 'contrast', 'sharpness']
+    metrics = ['brightness', 'brightness_median', 'contrast', 'sharpness', 'exposure']
     colors = {
         'brightness': '#636EFA',
         'brightness_median': '#AB63FA',
         'contrast': '#EF553B',
-        'sharpness': '#00CC96'
+        'sharpness': '#00CC96',
+        'exposure': '#FFA15A'
     }
 
     for metric in metrics:
@@ -434,6 +444,63 @@ def calculate_brightness_quartile_distribution(hist) -> Dict[str, int]:
     return quartiles
 
 
+def classify_exposure(quartiles: Dict[str, int], brightness_median_filtered: Optional[float]) -> str:
+    """
+    Classify image exposure using five-level academic-standard classification.
+
+    Uses brightness_median_filtered (2σ filtered median) as primary indicator,
+    with quartile distribution for bidirectional verification.
+
+    Based on academic standards:
+    - 2σ filtering corresponds to 2nd-98th percentile (96% of pixels)
+    - Thresholds: 0.2, 0.4, 0.6, 0.8 (normalized 0-1)
+    - Clipping detection: 1-5% tolerance for academic standard
+
+    Args:
+        quartiles: Dictionary with quartile pixel counts
+        brightness_median_filtered: 2σ-filtered median brightness (0-255)
+
+    Returns:
+        Five-level classification: 'severely_underexposed', 'moderately_underexposed',
+        'well_exposed', 'moderately_overexposed', 'severely_overexposed'
+    """
+    total_pixels = sum(quartiles.values())
+
+    if total_pixels == 0 or brightness_median_filtered is None:
+        return 'unknown'
+
+    # Normalize median to 0-1
+    median_norm = brightness_median_filtered / 255.0
+
+    # Calculate quartile percentages
+    dark_pct = (quartiles['0-63 (Dark)'] / total_pixels) * 100
+    bright_pct = (quartiles['192-255 (Bright)'] / total_pixels) * 100
+
+    # Five-level classification with bidirectional logic
+    # Primary: median_norm thresholds (academic standard)
+    # Secondary: quartile distribution (clipping detection)
+
+    # Severely underexposed
+    if median_norm < 0.2 or dark_pct > 20 or bright_pct < 2:
+        return 'severely_underexposed'
+
+    # Severely overexposed
+    elif median_norm > 0.8 or bright_pct > 20 or dark_pct < 2:
+        return 'severely_overexposed'
+
+    # Moderately underexposed
+    elif median_norm < 0.4 or dark_pct > 10 or bright_pct < 5:
+        return 'moderately_underexposed'
+
+    # Moderately overexposed
+    elif median_norm > 0.6 or bright_pct > 10 or dark_pct < 5:
+        return 'moderately_overexposed'
+
+    # Well exposed
+    else:
+        return 'well_exposed'
+
+
 def plot_quartile_pie_chart(quartiles: Dict[str, int]) -> go.Figure:
     """
     Create pie chart showing brightness quartile distribution.
@@ -492,6 +559,9 @@ def filter_results(df: pd.DataFrame, filters: Dict[str, Any]) -> pd.DataFrame:
 
     if filters['sharpness_classes']:
         filtered = filtered[filtered['sharpness_class'].isin(filters['sharpness_classes'])]
+
+    if filters['exposure_classes']:
+        filtered = filtered[filtered['exposure_class'].isin(filters['exposure_classes'])]
 
     # Value range filters
     if filters['brightness_range']:
@@ -751,6 +821,15 @@ def main():
             key=f'sharpness_filter_{st.session_state.reset_counter}'
         )
 
+        # Exposure filter
+        exposure_options = df['exposure_class'].dropna().unique().tolist()
+        exposure_selected = st.multiselect(
+            "Exposure",
+            options=exposure_options,
+            default=exposure_options,
+            key=f'exposure_filter_{st.session_state.reset_counter}'
+        )
+
         st.markdown("---")
         st.subheader("Metric Value Ranges")
 
@@ -805,6 +884,7 @@ def main():
         'brightness_median_classes': brightness_median_selected,
         'contrast_classes': contrast_selected,
         'sharpness_classes': sharpness_selected,
+        'exposure_classes': exposure_selected,
         'brightness_range': brightness_range,
         'brightness_median_range': brightness_median_range,
         'contrast_range': contrast_range,
@@ -912,6 +992,13 @@ def main():
                                 'sharpness': {
                                     'blurry': '#FFB3B3',
                                     'sharp': '#B3FFB3'
+                                },
+                                'exposure': {
+                                    'severely_underexposed': '#4A90E2',    # Deep blue (severely dark)
+                                    'moderately_underexposed': '#B3D9FF',  # Light blue (moderately dark)
+                                    'well_exposed': '#B3FFB3',             # Light green (good)
+                                    'moderately_overexposed': '#FFD9B3',   # Light orange (moderately bright)
+                                    'severely_overexposed': '#FF6B6B'      # Deep red (severely bright)
                                 }
                             }
                             return colors.get(metric, {}).get(value, '#FFFFFF')
@@ -921,6 +1008,7 @@ def main():
                         brightness_median_val = row['brightness_median_class']
                         contrast_val = row['contrast_class']
                         sharpness_val = row['sharpness_class']
+                        exposure_val = row['exposure_class']
                         prediction_val = row['prediction']
 
                         # Get metric values from result
@@ -934,6 +1022,7 @@ def main():
                         brightness_median_color = get_color('brightness', brightness_median_val)
                         contrast_color = get_color('contrast', contrast_val)
                         sharpness_color = get_color('sharpness', sharpness_val)
+                        exposure_color = get_color('exposure', exposure_val)
 
                         # Create HTML table with colored backgrounds and values
                         table_html = f"""
@@ -978,6 +1067,10 @@ def main():
                             <tr>
                                 <td>Sharpness</td>
                                 <td class="colored-cell" style="background-color: {sharpness_color};">{sharpness_val} ({sharpness_metric:.1f})</td>
+                            </tr>
+                            <tr>
+                                <td>Exposure</td>
+                                <td class="colored-cell" style="background-color: {exposure_color};">{exposure_val if exposure_val else 'N/A'}</td>
                             </tr>
                             <tr>
                                 <td>Prediction</td>
