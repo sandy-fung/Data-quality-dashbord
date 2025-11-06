@@ -50,8 +50,8 @@ def _generate_replacement_color_map(tokens: List[str]) -> Dict[str, str]:
     """
     Generate color map for replacement pairs, grouping by first character.
 
-    For example, "8>0", "8>1", "8>2" will all use shades of the same base color.
-    Colors are assigned based on the ORDER of tokens in the input list.
+    Each group (same first character) uses the same color.
+    Colors progressively get lighter from first group to last group.
 
     Args:
         tokens: List of replacement pair strings (e.g., ["8>0", "8>1", "0>8"])
@@ -60,25 +60,8 @@ def _generate_replacement_color_map(tokens: List[str]) -> Dict[str, str]:
     Returns:
         Dictionary mapping each token to its color
     """
-    # Define a set of highly distinguishable, vibrant base colors
-    # Using more saturated colors with better contrast
-    base_colors = [
-        "#FF6B6B",  # Bright Red
-        "#4ECDC4",  # Turquoise
-        "#45B7D1",  # Sky Blue
-        "#FFA07A",  # Light Salmon
-        "#98D8C8",  # Mint
-        "#F7DC6F",  # Yellow
-        "#BB8FCE",  # Lavender
-        "#85C1E2",  # Light Blue
-        "#F8B88B",  # Peach
-        "#52B788",  # Green
-        "#E07A5F",  # Terracotta
-        "#3D5A80",  # Navy
-        "#EE6C4D",  # Coral
-        "#F4A261",  # Sandy Brown
-        "#2A9D8F",  # Teal
-    ]
+    # Start with a deep color
+    base_color = "#1f4788"  # Deep blue
 
     # Group tokens by first character, preserving the input order
     first_char_groups: Dict[str, List[str]] = {}
@@ -92,40 +75,39 @@ def _generate_replacement_color_map(tokens: List[str]) -> Dict[str, str]:
                 first_char_order.append(first_char)
             first_char_groups[first_char].append(token)
 
-    # Assign base color to each first character group in the order they appear
+    # Assign progressively lighter shades to each group
     color_map = {}
+    num_groups = len(first_char_order)
+
     for idx, first_char in enumerate(first_char_order):
         group_tokens = first_char_groups[first_char]
-        base_color = base_colors[idx % len(base_colors)]
 
-        # For each token in the group, assign a variation of the base color
-        # Use the order as they appear in the original tokens list
-        for token_idx, token in enumerate(group_tokens):
-            if len(group_tokens) == 1:
-                # Only one token in group, use base color
-                color_map[token] = base_color
-            else:
-                # Multiple tokens, use saturation + brightness variation
-                # This keeps colors more distinguishable than just lightening
-                variation_factor = token_idx / (len(group_tokens) - 1)
-                # Mix of lightening and desaturation for better visibility
-                color_map[token] = _vary_color(base_color, variation_factor)
+        # Calculate lightness factor: 0.0 for first group, 1.0 for last group
+        if num_groups > 1:
+            lightness_factor = idx / (num_groups - 1)
+        else:
+            lightness_factor = 0.0
+
+        # Get the color for this group (progressively lighter)
+        group_color = _lighten_color(base_color, lightness_factor)
+
+        # All tokens in the same group get the same color
+        for token in group_tokens:
+            color_map[token] = group_color
 
     return color_map
 
 
-def _vary_color(hex_color: str, variation: float) -> str:
+def _lighten_color(hex_color: str, amount: float) -> str:
     """
-    Create a color variation by adjusting both saturation and brightness.
-
-    This keeps colors more distinguishable than just lightening.
+    Lighten a color by increasing its brightness.
 
     Args:
-        hex_color: Hex color string (e.g., "#FF6B6B")
-        variation: Variation amount (0.0 = original, 1.0 = maximum variation)
+        hex_color: Hex color string (e.g., "#1f4788")
+        amount: Lightening amount (0.0 = original, 1.0 = much lighter)
 
     Returns:
-        Varied hex color string
+        Lightened hex color string
     """
     import colorsys
 
@@ -137,16 +119,15 @@ def _vary_color(hex_color: str, variation: float) -> str:
     g = int(hex_color[2:4], 16) / 255.0
     b = int(hex_color[4:6], 16) / 255.0
 
-    # Convert to HSV
-    h, s, v = colorsys.rgb_to_hsv(r, g, b)
+    # Convert to HSL for better lightness control
+    h, l, s = colorsys.rgb_to_hls(r, g, b)
 
-    # Adjust saturation and value (brightness)
-    # Decrease saturation and increase brightness for variations
-    s = s * (1.0 - variation * 0.5)  # Reduce saturation up to 50%
-    v = min(1.0, v + variation * 0.3)  # Increase brightness up to 30%
+    # Increase lightness progressively
+    # Map amount (0.0 to 1.0) to lightness (current to 0.95)
+    l = l + (0.95 - l) * amount
 
     # Convert back to RGB
-    r, g, b = colorsys.hsv_to_rgb(h, s, v)
+    r, g, b = colorsys.hls_to_rgb(h, l, s)
 
     # Convert to hex
     r_int = int(r * 255)
