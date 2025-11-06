@@ -162,6 +162,7 @@ def analyze_text_predictions(
         - type_summary: counts per error type
         - detail_summary: detailed counts per label
         - metrics: aggregate metrics (dict)
+        - debug_info: debugging information (dict)
     """
     if rf_distance is None:
         raise ImportError("rapidfuzz is required for text analysis. Install with `uv pip install rapidfuzz`.")
@@ -181,11 +182,21 @@ def analyze_text_predictions(
                 "char_accuracy": 0.0,
                 "total_errors": 0,
             },
+            "debug_info": {
+                "total_predictions": 0,
+                "total_ground_truth": 0,
+                "skipped_no_gt": [],
+                "skipped_empty_pred": [],
+            },
         }
 
     comparisons: List[TextComparison] = []
     type_counter: Counter[str] = Counter()
     detail_counter: Dict[str, Counter[str]] = defaultdict(Counter)
+
+    # Debug tracking
+    skipped_no_gt: List[str] = []
+    skipped_empty_pred: List[str] = []
 
     for _, row in predictions.iterrows():
         run_name = str(row.get("run") or "unknown")
@@ -197,10 +208,12 @@ def analyze_text_predictions(
         base_name = Path(base_name_source).stem
         gt_text = ground_truth_map.get(base_name)
         if not gt_text:
+            skipped_no_gt.append(base_name)
             continue
 
         prediction_text = parse_prediction_text(str(row.get("label_text") or ""))
         if prediction_text == "":
+            skipped_empty_pred.append(base_name)
             continue
 
         edit_distance, errors = compare_texts(gt_text, prediction_text)
@@ -257,6 +270,13 @@ def analyze_text_predictions(
                 "plate_accuracy": 0.0,
                 "char_accuracy": 0.0,
                 "total_errors": 0,
+            },
+            "debug_info": {
+                "total_predictions": len(predictions),
+                "total_ground_truth": len(ground_truth_map),
+                "skipped_no_gt": list(set(skipped_no_gt)),
+                "skipped_empty_pred": list(set(skipped_empty_pred)),
+                "ground_truth_keys": list(ground_truth_map.keys())[:20],  # Show first 20
             },
         }
 
@@ -324,11 +344,20 @@ def analyze_text_predictions(
         "total_errors": total_errors,
     }
 
+    debug_info = {
+        "total_predictions": len(predictions),
+        "total_ground_truth": len(ground_truth_map),
+        "skipped_no_gt": list(set(skipped_no_gt)),
+        "skipped_empty_pred": list(set(skipped_empty_pred)),
+        "ground_truth_keys": list(ground_truth_map.keys())[:20],  # Show first 20
+    }
+
     return {
         "comparisons": comparisons_df,
         "type_summary": type_summary_df,
         "detail_summary": detail_summary_df,
         "metrics": metrics,
+        "debug_info": debug_info,
     }
 
 

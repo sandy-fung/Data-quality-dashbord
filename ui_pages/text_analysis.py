@@ -100,9 +100,40 @@ def _render_text_analysis_for_entry(entry, key_suffix: str) -> bool:
     type_summary_df: pd.DataFrame = analysis["type_summary"]  # type: ignore[assignment]
     detail_summary_df: pd.DataFrame = analysis["detail_summary"]  # type: ignore[assignment]
     metrics: Dict[str, float] = analysis["metrics"]  # type: ignore[assignment]
+    debug_info: Dict = analysis.get("debug_info", {})  # type: ignore[assignment]
 
     if comparisons_df.empty:
-        st.info("No overlapping records between predictions and ground truth for the selected run.")
+        st.warning("⚠️ No overlapping records between predictions and ground truth for the selected run.")
+
+        # Display debug information
+        with st.expander("🐛 Debug Information", expanded=True):
+            st.write(f"**Total predictions:** {debug_info.get('total_predictions', 0)}")
+            st.write(f"**Total ground truth files:** {debug_info.get('total_ground_truth', 0)}")
+
+            skipped_no_gt = debug_info.get('skipped_no_gt', [])
+            skipped_empty = debug_info.get('skipped_empty_pred', [])
+            gt_keys = debug_info.get('ground_truth_keys', [])
+
+            if skipped_no_gt:
+                st.write(f"**Files in predictions but NOT in ground truth:** {len(skipped_no_gt)}")
+                with st.expander(f"Show {len(skipped_no_gt)} unmatched prediction files"):
+                    st.code("\n".join(sorted(skipped_no_gt)[:50]))
+                    if len(skipped_no_gt) > 50:
+                        st.caption(f"... and {len(skipped_no_gt) - 50} more")
+
+            if skipped_empty:
+                st.write(f"**Files with empty predictions:** {len(skipped_empty)}")
+                with st.expander(f"Show {len(skipped_empty)} empty prediction files"):
+                    st.code("\n".join(sorted(skipped_empty)[:50]))
+                    if len(skipped_empty) > 50:
+                        st.caption(f"... and {len(skipped_empty) - 50} more")
+
+            if gt_keys:
+                st.write(f"**Sample ground truth filenames (first 20):**")
+                st.code("\n".join(gt_keys))
+
+            st.info("💡 **Tip:** Make sure the prediction filenames match the ground truth filenames (without extensions).")
+
         return False
 
     st.subheader("Overall metrics")
