@@ -332,6 +332,13 @@ def _render_text_analysis_for_entry(entry, key_suffix: str) -> bool:
         # For replacement pairs, sort by first character to group same colors together
         if error_type == "replace":
             summary_df = _sort_replacement_tokens(summary_df)
+            # Convert token to categorical to preserve the sorted order in pie chart
+            # Otherwise Plotly will re-sort by count
+            summary_df["token"] = pd.Categorical(
+                summary_df["token"],
+                categories=summary_df["token"].tolist(),
+                ordered=True
+            )
         else:
             summary_df = summary_df.sort_values("count", ascending=False)
 
