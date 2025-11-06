@@ -19,6 +19,52 @@ THUMBNAILS_PER_ROW = 5
 THUMBNAIL_MAX_SIZE = 160
 
 
+def _build_confusion_matrix(summary_df: pd.DataFrame) -> tuple[pd.DataFrame, List[str]]:
+    """
+    Build confusion matrix from replacement pairs data.
+
+    Args:
+        summary_df: DataFrame with 'token' column containing "X>Y" patterns
+
+    Returns:
+        Tuple of (confusion matrix DataFrame, list of all unique characters)
+    """
+    # Parse tokens to get ground_truth -> prediction mappings
+    matrix_data = {}
+    all_chars = set()
+
+    for _, row in summary_df.iterrows():
+        token = row["token"]
+        count = row["count"]
+
+        if ">" in token:
+            parts = token.split(">")
+            if len(parts) == 2:
+                ground_truth = parts[0].strip()
+                prediction = parts[1].strip()
+                all_chars.add(ground_truth)
+                all_chars.add(prediction)
+
+                if ground_truth not in matrix_data:
+                    matrix_data[ground_truth] = {}
+                matrix_data[ground_truth][prediction] = count
+
+    # Sort characters for consistent display
+    sorted_chars = sorted(all_chars)
+
+    # Build matrix DataFrame
+    matrix_rows = []
+    for gt_char in sorted_chars:
+        row = {}
+        for pred_char in sorted_chars:
+            row[pred_char] = matrix_data.get(gt_char, {}).get(pred_char, 0)
+        matrix_rows.append(row)
+
+    confusion_df = pd.DataFrame(matrix_rows, index=sorted_chars)
+
+    return confusion_df, sorted_chars
+
+
 def _sort_replacement_tokens(df: pd.DataFrame) -> pd.DataFrame:
     """
     Sort replacement tokens by first character group, then by count.
@@ -310,40 +356,50 @@ def _render_text_analysis_for_entry(entry, key_suffix: str) -> bool:
             .reset_index()
         )
 
-        # For replacement pairs, sort by first character to group same colors together
+        # For replacement pairs, use confusion matrix heatmap
         if error_type == "replace":
-            summary_df = _sort_replacement_tokens(summary_df)
+            confusion_matrix, char_labels = _build_confusion_matrix(summary_df)
+
+            # Create heatmap using plotly
+            import plotly.graph_objects as go
+
+            heatmap_fig = go.Figure(data=go.Heatmap(
+                z=confusion_matrix.values,
+                x=char_labels,
+                y=char_labels,
+                colorscale='Blues',
+                text=confusion_matrix.values,
+                texttemplate='%{text}',
+                textfont={"size": 10},
+                hovertemplate='Ground Truth: %{y}<br>Prediction: %{x}<br>Count: %{z}<extra></extra>',
+                colorbar=dict(title="Count")
+            ))
+
+            heatmap_fig.update_layout(
+                title=title,
+                xaxis_title="Predicted Character",
+                yaxis_title="Ground Truth Character",
+                xaxis={'side': 'bottom'},
+                yaxis={'autorange': 'reversed'},  # GT on top
+                width=600,
+                height=600,
+            )
+
+            st.plotly_chart(heatmap_fig, use_container_width=True)
         else:
+            # For delete and insert, keep pie chart
             summary_df = summary_df.sort_values("count", ascending=False)
-
-        # For replacement pairs, group by first character for better color organization
-        if error_type == "replace":
-            # Get the sorted token order
-            token_order = summary_df["token"].tolist()
-            color_map = _generate_replacement_color_map(token_order)
-
-            # Use category_orders to force Plotly to respect our sorting
-            pie_fig = px.pie(
-                summary_df,
-                names="token",
-                values="count",
-                title=title,
-                color="token",
-                color_discrete_map=color_map,
-                category_orders={"token": token_order}
-            )
-        else:
             pie_fig = px.pie(
                 summary_df,
                 names="token",
                 values="count",
                 title=title,
             )
-        pie_fig.update_traces(
-            textinfo="label",
-            hovertemplate="%{label}: %{value}<extra></extra>",
-        )
-        st.plotly_chart(pie_fig, use_container_width=True)
+            pie_fig.update_traces(
+                textinfo="label",
+                hovertemplate="%{label}: %{value}<extra></extra>",
+            )
+            st.plotly_chart(pie_fig, use_container_width=True)
 
         table_df = summary_df.copy()
         table_df[label_column] = table_df.pop("token")
