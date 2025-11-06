@@ -51,9 +51,11 @@ def _generate_replacement_color_map(tokens: List[str]) -> Dict[str, str]:
     Generate color map for replacement pairs, grouping by first character.
 
     For example, "8>0", "8>1", "8>2" will all use shades of the same base color.
+    Colors are assigned based on the ORDER of tokens in the input list.
 
     Args:
         tokens: List of replacement pair strings (e.g., ["8>0", "8>1", "0>8"])
+                Should already be sorted in the desired display order.
 
     Returns:
         Dictionary mapping each token to its color
@@ -78,22 +80,27 @@ def _generate_replacement_color_map(tokens: List[str]) -> Dict[str, str]:
         "#2A9D8F",  # Teal
     ]
 
-    # Group tokens by first character
+    # Group tokens by first character, preserving the input order
     first_char_groups: Dict[str, List[str]] = {}
+    first_char_order: List[str] = []  # Track the order first characters appear
+
     for token in tokens:
         if ">" in token:
             first_char = token.split(">")[0]
             if first_char not in first_char_groups:
                 first_char_groups[first_char] = []
+                first_char_order.append(first_char)
             first_char_groups[first_char].append(token)
 
-    # Assign base color to each first character group
+    # Assign base color to each first character group in the order they appear
     color_map = {}
-    for idx, (first_char, group_tokens) in enumerate(sorted(first_char_groups.items())):
+    for idx, first_char in enumerate(first_char_order):
+        group_tokens = first_char_groups[first_char]
         base_color = base_colors[idx % len(base_colors)]
 
         # For each token in the group, assign a variation of the base color
-        for token_idx, token in enumerate(sorted(group_tokens)):
+        # Use the order as they appear in the original tokens list
+        for token_idx, token in enumerate(group_tokens):
             if len(group_tokens) == 1:
                 # Only one token in group, use base color
                 color_map[token] = base_color
