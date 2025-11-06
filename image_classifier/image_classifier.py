@@ -172,6 +172,35 @@ def collect_image_paths(input_path: Path) -> List[Path]:
 
 
 
+def analyze_images_from_paths(image_paths: List[Path], input_path_str: str = "") -> Dict[str, Any]:
+    """
+    Core analysis function that can be called from GUI or CLI.
+
+    Args:
+        image_paths: List of image file paths to process
+        input_path_str: Optional string representation of input path for summary
+
+    Returns:
+        Dictionary with analysis results in standard JSON format
+    """
+    results = []
+    for img_path in image_paths:
+        result = process_single_image(img_path)
+        results.append(result)
+
+    # Build output data (metrics only, no classification)
+    output_data = {
+        "summary": {
+            "total_images": len(results),
+            "timestamp": datetime.now().isoformat(),
+            "input_path": input_path_str or "uploaded_images",
+        },
+        "results": results,
+    }
+
+    return output_data
+
+
 def process_images(
     input_path: Path,
     output_path: Path,
@@ -195,24 +224,13 @@ def process_images(
     if verbose:
         print(f"Found {len(image_paths)} image(s) to process")
 
-    # Process each image
-    results = []
+    # Process each image (with progress output)
     for idx, img_path in enumerate(image_paths, 1):
         if verbose:
             print(f"Processing [{idx}/{len(image_paths)}]: {img_path.name}")
 
-        result = process_single_image(img_path)
-        results.append(result)
-
-    # Build output JSON (metrics only, no classification)
-    output_data = {
-        "summary": {
-            "total_images": len(results),
-            "timestamp": datetime.now().isoformat(),
-            "input_path": str(input_path.resolve()),
-        },
-        "results": results,
-    }
+    # Use core analysis function
+    output_data = analyze_images_from_paths(image_paths, str(input_path.resolve()))
 
     # Write to output file
     with open(output_path, "w", encoding="utf-8") as f:
@@ -220,7 +238,7 @@ def process_images(
 
     if verbose:
         print(f"\n✓ Results saved to: {output_path}")
-        print(f"  Total images processed: {len(results)}")
+        print(f"  Total images processed: {len(output_data['results'])}")
 
 
 def main() -> None:

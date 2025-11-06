@@ -10,31 +10,43 @@ uv pip install pillow numpy opencv-python streamlit plotly pandas
 
 ## Usage
 
-### 1. Extract Image Metrics
-
-```bash
-# Batch process directory
-uv run python image_classifier.py -i ./images/ -o results.json -v
-
-# Single image
-uv run python image_classifier.py -i photo.jpg -o result.json
-```
-
-### 2. Launch GUI
+### Option 1: GUI with Direct Image Analysis (Recommended)
 
 ```bash
 uv run streamlit run classifier_viewer.py
 ```
 
-Open browser at http://localhost:8501 and upload `results.json` for interactive analysis.
+Open browser at http://localhost:8501:
+1. Select "Analyze images directly"
+2. Upload images (drag & drop or browse)
+3. Results are analyzed and displayed automatically
+
+### Option 2: CLI + GUI Workflow
+
+```bash
+# Step 1: Extract metrics using CLI
+uv run python image_classifier.py -i ./images/ -o results.json -v
+
+# Step 2: Launch GUI
+uv run streamlit run classifier_viewer.py
+```
+
+In the GUI:
+1. Select "Upload JSON file"
+2. Upload `results.json` for analysis
 
 ## GUI Features
 
+- **Dual Input Modes**: Analyze images directly or upload pre-generated JSON
 - Statistical dashboard with distribution charts
 - Multi-dimensional filtering (brightness, contrast, sharpness)
 - 256-bin brightness histogram with logarithmic scale
 - YOLO prediction results display
-- Export filtered results (CSV/JSON)
+- Export options:
+  - **Full JSON**: Complete analysis results (use this to save direct analysis)
+  - **Filtered CSV**: Filtered results in spreadsheet format
+  - **Filtered JSON**: Filtered results for further processing
+  - **File Paths**: Text list of image paths
 
 ## Configuration
 
