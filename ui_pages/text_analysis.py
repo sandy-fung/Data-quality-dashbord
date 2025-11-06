@@ -19,6 +19,93 @@ THUMBNAILS_PER_ROW = 5
 THUMBNAIL_MAX_SIZE = 160
 
 
+def _generate_replacement_color_map(tokens: List[str]) -> Dict[str, str]:
+    """
+    Generate color map for replacement pairs, grouping by first character.
+
+    For example, "8>0", "8>1", "8>2" will all use shades of the same base color.
+
+    Args:
+        tokens: List of replacement pair strings (e.g., ["8>0", "8>1", "0>8"])
+
+    Returns:
+        Dictionary mapping each token to its color
+    """
+    # Define a set of distinguishable base colors
+    base_colors = [
+        "#1f77b4",  # Blue
+        "#ff7f0e",  # Orange
+        "#2ca02c",  # Green
+        "#d62728",  # Red
+        "#9467bd",  # Purple
+        "#8c564b",  # Brown
+        "#e377c2",  # Pink
+        "#7f7f7f",  # Gray
+        "#bcbd22",  # Olive
+        "#17becf",  # Cyan
+        "#aec7e8",  # Light Blue
+        "#ffbb78",  # Light Orange
+        "#98df8a",  # Light Green
+        "#ff9896",  # Light Red
+        "#c5b0d5",  # Light Purple
+    ]
+
+    # Group tokens by first character
+    first_char_groups: Dict[str, List[str]] = {}
+    for token in tokens:
+        if ">" in token:
+            first_char = token.split(">")[0]
+            if first_char not in first_char_groups:
+                first_char_groups[first_char] = []
+            first_char_groups[first_char].append(token)
+
+    # Assign base color to each first character group
+    color_map = {}
+    for idx, (first_char, group_tokens) in enumerate(sorted(first_char_groups.items())):
+        base_color = base_colors[idx % len(base_colors)]
+
+        # For each token in the group, assign a shade of the base color
+        for token_idx, token in enumerate(sorted(group_tokens)):
+            if len(group_tokens) == 1:
+                # Only one token in group, use base color
+                color_map[token] = base_color
+            else:
+                # Multiple tokens, use different shades
+                # Lighten the color for subsequent tokens
+                shade_factor = token_idx / (len(group_tokens) - 1)
+                color_map[token] = _lighten_color(base_color, shade_factor * 0.4)
+
+    return color_map
+
+
+def _lighten_color(hex_color: str, amount: float) -> str:
+    """
+    Lighten a hex color by a given amount (0.0 to 1.0).
+
+    Args:
+        hex_color: Hex color string (e.g., "#1f77b4")
+        amount: Amount to lighten (0.0 = no change, 1.0 = white)
+
+    Returns:
+        Lightened hex color string
+    """
+    # Remove '#' if present
+    hex_color = hex_color.lstrip('#')
+
+    # Convert hex to RGB
+    r = int(hex_color[0:2], 16)
+    g = int(hex_color[2:4], 16)
+    b = int(hex_color[4:6], 16)
+
+    # Lighten by moving towards white (255)
+    r = int(r + (255 - r) * amount)
+    g = int(g + (255 - g) * amount)
+    b = int(b + (255 - b) * amount)
+
+    # Convert back to hex
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+
 def render_text_analysis_page() -> None:
     """Render text analysis visualizations."""
     st.title("\U0001f4dd Text Analysis")
@@ -192,12 +279,25 @@ def _render_text_analysis_for_entry(entry, key_suffix: str) -> bool:
             .reset_index()
             .sort_values("count", ascending=False)
         )
-        pie_fig = px.pie(
-            summary_df,
-            names="token",
-            values="count",
-            title=title,
-        )
+
+        # For replacement pairs, group by first character for better color organization
+        if error_type == "replace":
+            color_map = _generate_replacement_color_map(summary_df["token"].tolist())
+            pie_fig = px.pie(
+                summary_df,
+                names="token",
+                values="count",
+                title=title,
+                color="token",
+                color_discrete_map=color_map,
+            )
+        else:
+            pie_fig = px.pie(
+                summary_df,
+                names="token",
+                values="count",
+                title=title,
+            )
         pie_fig.update_traces(
             textinfo="label",
             hovertemplate="%{label}: %{value}<extra></extra>",
