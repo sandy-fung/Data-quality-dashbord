@@ -64,8 +64,14 @@ def render_sidebar() -> str:
 
         st.divider()
 
+        # Check if any dataset has label runs for Text Analysis
+        has_label_runs = any(
+            ds_state.get_dataset_label_runs(entry.id)
+            for entry in ds_state.list_datasets().values()
+        )
+
         pages = ["📁 Data Source", "📋 Dataset Preview", "🚨 Error Overview", "📈 Trends"]
-        if entry and entry.ground_truth and entry.label_runs:
+        if has_label_runs:
             pages.append("📝 Text Analysis")
 
         previous_page = st.session_state.get("navigation_page")
