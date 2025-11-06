@@ -331,9 +331,23 @@ def _render_json_upload_tab() -> bool:
                     "image_dir": "D:/dataset/picked/test2/images",
                     "label_dir": "D:/dataset/picked/test2/labels"
                 }
+            ],
+            "runs": [
+                {
+                    "dataset": "Dataset_1",
+                    "name": "run_1",
+                    "description": "First error batch",
+                    "label_dir": "D:/dataset/picked/test1/wrong_labels"
+                },
+                {
+                    "dataset": "Dataset_2",
+                    "name": "run_1",
+                    "label_dir": "D:/dataset/picked/test2/wrong_labels"
+                }
             ]
         }
         st.json(example_config)
+        st.caption("💡 The 'runs' section is optional. Use it to batch import label runs for error tracking.")
 
         # Download example button
         st.download_button(
@@ -360,14 +374,34 @@ def _render_json_upload_tab() -> bool:
         st.warning("No datasets found in configuration")
         return False
 
+    # Check for runs configuration
+    runs_config = config_data.get("runs", [])
+    has_runs = isinstance(runs_config, list) and len(runs_config) > 0
+
     st.info(f"Found {len(datasets_config)} dataset(s) in configuration")
+    if has_runs:
+        st.info(f"Found {len(runs_config)} label run(s) in configuration")
 
     # Show preview and confirm button
-    preview_df = pd.DataFrame(datasets_config)
-    st.dataframe(preview_df, use_container_width=True)
+    col1, col2 = st.columns(2)
+    with col1:
+        st.caption("**Datasets:**")
+        preview_df = pd.DataFrame(datasets_config)
+        st.dataframe(preview_df, use_container_width=True)
 
-    if st.button("Import all datasets", type="primary", use_container_width=True):
-        return _batch_import_datasets(datasets_config)
+    if has_runs:
+        with col2:
+            st.caption("**Label Runs:**")
+            runs_preview_df = pd.DataFrame(runs_config)
+            st.dataframe(runs_preview_df, use_container_width=True)
+
+    button_label = "Import all" if has_runs else "Import all datasets"
+    if st.button(button_label, type="primary", use_container_width=True):
+        datasets_success = _batch_import_datasets(datasets_config)
+        if has_runs and datasets_success:
+            runs_success = _batch_import_runs(runs_config)
+            return datasets_success or runs_success
+        return datasets_success
 
     return False
 
@@ -449,6 +483,128 @@ def _batch_import_datasets(datasets_config: list) -> bool:
 
     if error_count > 0:
         st.error(f"❌ Failed to import {error_count} dataset(s)")
+        with st.expander("View errors"):
+            for error in errors:
+                st.text(error)
+
+    return success_count > 0
+
+
+def _batch_import_runs(runs_config: list) -> bool:
+    """Batch import multiple label runs from configuration."""
+    from datetime import datetime
+    from pathlib import Path
+
+    success_count = 0
+    error_count = 0
+    errors = []
+
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+
+    for idx, run_config in enumerate(runs_config):
+        dataset_name = run_config.get("dataset", "")
+        run_name = run_config.get("name", "")
+        status_text.text(f"Processing run {idx + 1}/{len(runs_config)}: {dataset_name}/{run_name}")
+
+        try:
+            # Validate required fields
+            if not dataset_name:
+                raise ValueError("Missing required field: dataset")
+            if not run_name:
+                raise ValueError("Missing required field: name")
+            if "label_dir" not in run_config:
+                raise ValueError("Missing required field: label_dir")
+
+            # Find dataset by name
+            dataset_entry = None
+            for entry in ds_state.list_datasets().values():
+                if entry.name == dataset_name:
+                    dataset_entry = entry
+                    break
+
+            if not dataset_entry:
+                raise ValueError(f"Dataset '{dataset_name}' not found")
+
+            label_dir = run_config["label_dir"]
+            description = run_config.get("description", "")
+
+            # Load label files from directory
+            label_path = Path(label_dir)
+            if not label_path.exists() or not label_path.is_dir():
+                raise ValueError(f"Label directory does not exist: {label_dir}")
+
+            label_files = list(label_path.glob("*.txt"))
+            if not label_files:
+                raise ValueError(f"No .txt files found in {label_dir}")
+
+            # Create label records
+            records = []
+            for label_file in label_files:
+                try:
+                    content = label_file.read_text(encoding="utf-8", errors="ignore").strip()
+                    records.append({
+                        "filename": label_file.stem,
+                        "source_name": label_file.name,
+                        "label_text": content,
+                    })
+                except Exception as exc:
+                    st.warning(f"Failed to read {label_file.name}: {exc}")
+                    continue
+
+            if not records:
+                raise ValueError(f"No valid label files found in {label_dir}")
+
+            # Create label run
+            label_run = {
+                "name": run_name,
+                "description": description,
+                "created_at": datetime.now().isoformat(),
+                "labels": records,
+            }
+
+            # Add to dataset's label_runs
+            if dataset_entry.label_runs is None:
+                dataset_entry.label_runs = []
+
+            # Check if run with same name already exists
+            existing_run = None
+            for existing in dataset_entry.label_runs:
+                if existing["name"] == run_name:
+                    existing_run = existing
+                    break
+
+            if existing_run:
+                # Update existing run
+                existing_run.update(label_run)
+            else:
+                # Add new run
+                dataset_entry.label_runs.append(label_run)
+
+            # Update dataset entry to trigger is_wrong column update
+            ds_state.update_dataset_entry(
+                dataset_entry.id,
+                label_runs=dataset_entry.label_runs
+            )
+
+            success_count += 1
+
+        except Exception as exc:
+            error_count += 1
+            error_msg = f"{dataset_name}/{run_name}: {str(exc)}"
+            errors.append(error_msg)
+
+        progress_bar.progress((idx + 1) / len(runs_config))
+
+    progress_bar.empty()
+    status_text.empty()
+
+    # Show summary
+    if success_count > 0:
+        st.success(f"✅ Successfully imported {success_count} label run(s)")
+
+    if error_count > 0:
+        st.error(f"❌ Failed to import {error_count} label run(s)")
         with st.expander("View errors"):
             for error in errors:
                 st.text(error)
