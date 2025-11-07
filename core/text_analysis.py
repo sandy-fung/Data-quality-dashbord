@@ -325,10 +325,12 @@ def analyze_text_predictions(
     else:
         plate_accuracy_ratio = 0.0
 
-    total_characters = float(comparisons_df["char_length"].sum())
+    # Calculate character accuracy: 1 - (errors in run / total chars in dataset)
+    # Use all ground truth chars as denominator, not just compared files
+    total_dataset_characters = float(sum(len(text) for text in ground_truth_map.values()))
     wrong_characters = float(comparisons_df["edit_distance"].sum())
-    if total_characters > 0:
-        char_accuracy_ratio = 1.0 - (wrong_characters / total_characters)
+    if total_dataset_characters > 0:
+        char_accuracy_ratio = 1.0 - (wrong_characters / total_dataset_characters)
         char_accuracy_ratio = max(0.0, min(1.0, char_accuracy_ratio))
     else:
         char_accuracy_ratio = 0.0
