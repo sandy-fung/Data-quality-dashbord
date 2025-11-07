@@ -19,19 +19,20 @@ THUMBNAILS_PER_ROW = 5
 THUMBNAIL_MAX_SIZE = 160
 
 
-def _build_confusion_matrix(summary_df: pd.DataFrame) -> tuple[pd.DataFrame, List[str]]:
+def _group_replacement_by_first_char(summary_df: pd.DataFrame) -> pd.DataFrame:
     """
-    Build confusion matrix from replacement pairs data.
+    Group replacement pairs by first character (ground truth).
 
     Args:
-        summary_df: DataFrame with 'token' column containing "X>Y" patterns
+        summary_df: DataFrame with 'token' column containing "X>Y" patterns and 'count' column
 
     Returns:
-        Tuple of (confusion matrix DataFrame, list of all unique characters)
+        DataFrame with columns: character, total_count, details (for hover text)
     """
-    # Parse tokens to get ground_truth -> prediction mappings
-    matrix_data = {}
-    all_chars = set()
+    from collections import defaultdict
+
+    # Group by first character
+    grouped_data = defaultdict(lambda: {"total": 0, "breakdown": []})
 
     for _, row in summary_df.iterrows():
         token = row["token"]
@@ -40,147 +41,30 @@ def _build_confusion_matrix(summary_df: pd.DataFrame) -> tuple[pd.DataFrame, Lis
         if ">" in token:
             parts = token.split(">")
             if len(parts) == 2:
-                ground_truth = parts[0].strip()
-                prediction = parts[1].strip()
-                all_chars.add(ground_truth)
-                all_chars.add(prediction)
+                first_char = parts[0].strip()
+                grouped_data[first_char]["total"] += count
+                grouped_data[first_char]["breakdown"].append((token, count))
 
-                if ground_truth not in matrix_data:
-                    matrix_data[ground_truth] = {}
-                matrix_data[ground_truth][prediction] = count
+    # Build result DataFrame
+    result_rows = []
+    for char, data in grouped_data.items():
+        # Sort breakdown by count descending
+        breakdown_sorted = sorted(data["breakdown"], key=lambda x: x[1], reverse=True)
+        # Create hover text
+        breakdown_text = "<br>".join([f"{token}: {cnt}" for token, cnt in breakdown_sorted])
 
-    # Sort characters for consistent display
-    sorted_chars = sorted(all_chars)
+        result_rows.append({
+            "character": char,
+            "total_count": data["total"],
+            "breakdown": breakdown_text,
+        })
 
-    # Build matrix DataFrame
-    matrix_rows = []
-    for gt_char in sorted_chars:
-        row = {}
-        for pred_char in sorted_chars:
-            row[pred_char] = matrix_data.get(gt_char, {}).get(pred_char, 0)
-        matrix_rows.append(row)
+    result_df = pd.DataFrame(result_rows)
 
-    confusion_df = pd.DataFrame(matrix_rows, index=sorted_chars)
+    # Sort by total_count descending
+    result_df = result_df.sort_values("total_count", ascending=False).reset_index(drop=True)
 
-    return confusion_df, sorted_chars
-
-
-def _sort_replacement_tokens(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Sort replacement tokens by first character group, then by count.
-
-    This ensures same-color slices are adjacent in the pie chart.
-
-    Args:
-        df: DataFrame with 'token' and 'count' columns
-
-    Returns:
-        Sorted DataFrame
-    """
-    # Extract first character from token (e.g., "8>0" -> "8")
-    df = df.copy()
-    df["_first_char"] = df["token"].apply(
-        lambda x: x.split(">")[0] if ">" in x else x
-    )
-
-    # Sort by first character, then by count within each group (descending)
-    df = df.sort_values(
-        ["_first_char", "count"],
-        ascending=[True, False]
-    ).drop(columns=["_first_char"]).reset_index(drop=True)
-
-    return df
-
-
-def _generate_replacement_color_map(tokens: List[str]) -> Dict[str, str]:
-    """
-    Generate color map for replacement pairs, grouping by first character.
-
-    Each group (same first character) uses the same color.
-    Colors progressively get lighter from first group to last group.
-
-    Args:
-        tokens: List of replacement pair strings (e.g., ["8>0", "8>1", "0>8"])
-                Should already be sorted in the desired display order.
-
-    Returns:
-        Dictionary mapping each token to its color
-    """
-    # Start with a deep color
-    base_color = "#1f4788"  # Deep blue
-
-    # Group tokens by first character, preserving the input order
-    first_char_groups: Dict[str, List[str]] = {}
-    first_char_order: List[str] = []  # Track the order first characters appear
-
-    for token in tokens:
-        if ">" in token:
-            first_char = token.split(">")[0]
-            if first_char not in first_char_groups:
-                first_char_groups[first_char] = []
-                first_char_order.append(first_char)
-            first_char_groups[first_char].append(token)
-
-    # Assign progressively lighter shades to each group
-    color_map = {}
-    num_groups = len(first_char_order)
-
-    for idx, first_char in enumerate(first_char_order):
-        group_tokens = first_char_groups[first_char]
-
-        # Calculate lightness factor: 0.0 for first group, 1.0 for last group
-        if num_groups > 1:
-            lightness_factor = idx / (num_groups - 1)
-        else:
-            lightness_factor = 0.0
-
-        # Get the color for this group (progressively lighter)
-        group_color = _lighten_color(base_color, lightness_factor)
-
-        # All tokens in the same group get the same color
-        for token in group_tokens:
-            color_map[token] = group_color
-
-    return color_map
-
-
-def _lighten_color(hex_color: str, amount: float) -> str:
-    """
-    Lighten a color by increasing its brightness.
-
-    Args:
-        hex_color: Hex color string (e.g., "#1f4788")
-        amount: Lightening amount (0.0 = original, 1.0 = much lighter)
-
-    Returns:
-        Lightened hex color string
-    """
-    import colorsys
-
-    # Remove '#' if present
-    hex_color = hex_color.lstrip('#')
-
-    # Convert hex to RGB (0-1 range)
-    r = int(hex_color[0:2], 16) / 255.0
-    g = int(hex_color[2:4], 16) / 255.0
-    b = int(hex_color[4:6], 16) / 255.0
-
-    # Convert to HSL for better lightness control
-    h, l, s = colorsys.rgb_to_hls(r, g, b)
-
-    # Increase lightness progressively
-    # Map amount (0.0 to 1.0) to lightness (current to 0.95)
-    l = l + (0.95 - l) * amount
-
-    # Convert back to RGB
-    r, g, b = colorsys.hls_to_rgb(h, l, s)
-
-    # Convert to hex
-    r_int = int(r * 255)
-    g_int = int(g * 255)
-    b_int = int(b * 255)
-
-    return f"#{r_int:02x}{g_int:02x}{b_int:02x}"
+    return result_df
 
 
 def render_text_analysis_page() -> None:
@@ -356,38 +240,26 @@ def _render_text_analysis_for_entry(entry, key_suffix: str) -> bool:
             .reset_index()
         )
 
-        # For replacement pairs, use confusion matrix heatmap
+        # For replacement pairs, group by first character and show in pie chart
         if error_type == "replace":
-            confusion_matrix, char_labels = _build_confusion_matrix(summary_df)
+            # Group by first character
+            grouped_df = _group_replacement_by_first_char(summary_df)
 
-            # Create heatmap using plotly
-            import plotly.graph_objects as go
-
-            heatmap_fig = go.Figure(data=go.Heatmap(
-                z=confusion_matrix.values,
-                x=char_labels,
-                y=char_labels,
-                colorscale='Blues',
-                text=confusion_matrix.values,
-                texttemplate='%{text}',
-                textfont={"size": 10},
-                hovertemplate='Ground Truth: %{y}<br>Prediction: %{x}<br>Count: %{z}<extra></extra>',
-                colorbar=dict(title="Count")
-            ))
-
-            heatmap_fig.update_layout(
+            # Create pie chart with custom hover text
+            pie_fig = px.pie(
+                grouped_df,
+                names="character",
+                values="total_count",
                 title=title,
-                xaxis_title="Predicted Character",
-                yaxis_title="Ground Truth Character",
-                xaxis={'side': 'bottom'},
-                yaxis={'autorange': 'reversed'},  # GT on top
-                width=600,
-                height=600,
+                custom_data=["breakdown"]
             )
-
-            st.plotly_chart(heatmap_fig, use_container_width=True)
+            pie_fig.update_traces(
+                textinfo="label",
+                hovertemplate="<b>%{label}</b><br>Total: %{value}<br><br>%{customdata[0]}<extra></extra>",
+            )
+            st.plotly_chart(pie_fig, use_container_width=True)
         else:
-            # For delete and insert, keep pie chart
+            # For delete and insert, keep original pie chart
             summary_df = summary_df.sort_values("count", ascending=False)
             pie_fig = px.pie(
                 summary_df,
