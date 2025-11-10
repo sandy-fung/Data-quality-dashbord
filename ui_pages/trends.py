@@ -167,6 +167,7 @@ def _render_interactive_explorer(entry, key_suffix: str) -> None:
                 bin_index=selected_index,
                 detail_df=detail_selected if not detail_selected.empty else None,
                 run_label=active_run_label,
+                dataset_id=key_suffix,
             )
 
     st.markdown("#### Correlation Heatmap")
@@ -517,6 +518,7 @@ def _render_numeric_bin_preview(
     bin_index: int,
     detail_df: Optional[pd.DataFrame],
     run_label: Optional[str],
+    dataset_id: str,
 ) -> None:
     """Display dataset rows and thumbnails for the selected numeric bin."""
     if not bin_edges or bin_index >= len(bin_edges) - 1:
@@ -545,7 +547,7 @@ def _render_numeric_bin_preview(
     row_count = len(bin_rows)
     st.caption(f"{row_count} rows in this range.")
     range_token = range_label.replace(" ", "_")
-    table_key = f"numeric_bin_records_{column}_{range_token}"
+    table_key = f"numeric_bin_records_{dataset_id}_{column}_{range_token}"
     display_df = bin_rows.reset_index(drop=True)
     with st.expander(f"Dataset records ({row_count})", expanded=False):
         clean_df = display_df.drop(columns=["image_path", "label_path"], errors="ignore")
