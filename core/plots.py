@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Callable, Dict, List, Optional
 
+import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -298,9 +299,9 @@ def stratified_heatmap(
     y_title: str = "",
     value_label: str | None = "Value",
     value_format: str = "%{z}",
-    hover_column: str | None = None,
-    hover_label: str | None = "Count",
-    hover_format: str = "%{customdata}",
+    hover_columns: List[str] | None = None,
+    hover_labels: List[str] | None = None,
+    hover_formats: List[str] | None = None,
 ) -> go.Figure:
     """Render a heatmap from stratified bin statistics."""
     fig = go.Figure()
@@ -338,18 +339,26 @@ def stratified_heatmap(
         matrix = matrix.fillna(fill_value)
 
     customdata = None
-    if hover_column is not None and hover_column in stats_df.columns:
-        hover_pivot = (
-            stats_df.pivot_table(
-                index="strata_label",
-                columns="x_label",
-                values=hover_column,
-                aggfunc="first",
-            )
-            .reindex(index=strata_labels, columns=x_labels)
-        )
-        hover_matrix = hover_pivot.fillna(0)
-        customdata = hover_matrix.to_numpy()[..., None]
+    if hover_columns is not None and len(hover_columns) > 0:
+        # Build customdata array with shape (rows, cols, num_hover_fields)
+        hover_matrices = []
+        for hover_col in hover_columns:
+            if hover_col in stats_df.columns:
+                hover_pivot = (
+                    stats_df.pivot_table(
+                        index="strata_label",
+                        columns="x_label",
+                        values=hover_col,
+                        aggfunc="first",
+                    )
+                    .reindex(index=strata_labels, columns=x_labels)
+                )
+                hover_matrix = hover_pivot.fillna(0)
+                hover_matrices.append(hover_matrix.to_numpy())
+
+        if hover_matrices:
+            # Stack matrices along third dimension
+            customdata = np.stack(hover_matrices, axis=-1)
 
     text = None
     if text_formatter is not None:
@@ -364,8 +373,9 @@ def stratified_heatmap(
     hover_lines: List[str] = []
     if value_label:
         hover_lines.append(f"{value_label}: {value_format}")
-    if customdata is not None and hover_label:
-        hover_lines.append(f"{hover_label}: {hover_format}")
+    if customdata is not None and hover_labels and hover_formats:
+        for i, (label, fmt) in enumerate(zip(hover_labels, hover_formats)):
+            hover_lines.append(f"{label}: {fmt.replace('%{customdata}', f'%{{customdata[{i}]}}')}")
 
     if hover_lines:
         hover_body = "<br>".join(hover_lines)

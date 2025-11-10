@@ -330,9 +330,9 @@ def _render_interactive_explorer(entry, key_suffix: str) -> None:
                 x_title=f"{x_column} bins",
                 y_title=f"{strata_column} bins",
                 value_label=None,
-                hover_column="accuracy_pct",
-                hover_label="Accuracy (%)",
-                hover_format="%{customdata[0]:.1f}",
+                hover_columns=["accuracy_pct", "wrong_count"],
+                hover_labels=["Accuracy (%)", "Matched"],
+                hover_formats=["%{customdata:.1f}", "%{customdata:.0f}"],
             )
             accuracy_fig = plots.stratified_heatmap(
                 stats_df=stats_df,
@@ -347,9 +347,9 @@ def _render_interactive_explorer(entry, key_suffix: str) -> None:
                 x_title=f"{x_column} bins",
                 y_title=f"{strata_column} bins",
                 value_label=None,
-                hover_column="dataset_count",
-                hover_label="Count",
-                hover_format="%{customdata[0]:.0f}",
+                hover_columns=["dataset_count", "wrong_count"],
+                hover_labels=["Count", "Matched"],
+                hover_formats=["%{customdata:.0f}", "%{customdata:.0f}"],
             )
             col_count, col_accuracy = st.columns(2)
             with col_count:
