@@ -16,7 +16,7 @@ except ImportError:  # pragma: no cover
     plotly_events = None  # type: ignore[misc]
 
 from core import datasets as ds_state
-from core import metrics, plots
+from core import metrics, plots, text_analysis
 from core.labels import build_label_run_frames
 
 try:
@@ -183,6 +183,7 @@ def _render_interactive_explorer(entry, key_suffix: str) -> None:
                 detail_df=detail_selected if not detail_selected.empty else None,
                 run_label=active_run_label,
                 dataset_id=key_suffix,
+                entry=entry,
             )
 
     st.markdown("#### Correlation Heatmap")
@@ -577,6 +578,7 @@ def _render_numeric_bin_preview(
     detail_df: Optional[pd.DataFrame],
     run_label: Optional[str],
     dataset_id: str,
+    entry,
 ) -> None:
     """Display dataset rows and thumbnails for the selected numeric bin."""
     if not bin_edges or bin_index >= len(bin_edges) - 1:
@@ -624,16 +626,29 @@ def _render_numeric_bin_preview(
                 detail_mask &= matched_values > start
             detail_mask &= matched_values <= end
             flagged_rows = matched[detail_mask].copy()
+
+            # Add ground_truth and prediction columns
+            ground_truth_map = entry.ground_truth if entry and entry.ground_truth else {}
+
+            def get_ground_truth(filename):
+                basename = Path(str(filename)).stem if filename else ""
+                return ground_truth_map.get(basename, "")
+
+            def get_prediction(label_text):
+                if not label_text or pd.isna(label_text):
+                    return ""
+                try:
+                    return text_analysis.parse_prediction_text(str(label_text))
+                except Exception:
+                    return ""
+
+            flagged_rows["ground_truth"] = flagged_rows["filename"].apply(get_ground_truth)
+            flagged_rows["prediction"] = flagged_rows["label_text"].apply(get_prediction)
+
+            # Only keep run, filename, ground_truth, prediction
             label_columns = [
                 col
-                for col in [
-                    "run",
-                    "filename",
-                    "label_text",
-                    "source_name",
-                    "description",
-                    "created_at",
-                ]
+                for col in ["run", "filename", "ground_truth", "prediction"]
                 if col in flagged_rows.columns
             ]
             dedupe_columns = label_columns.copy()
