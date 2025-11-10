@@ -186,41 +186,6 @@ def _render_interactive_explorer(entry, key_suffix: str) -> None:
                 entry=entry,
             )
 
-    st.markdown("#### Correlation Heatmap")
-    if len(numeric_cols) < 2:
-        message = (
-            "Need at least two numeric columns for correlation analysis."
-            if numeric_cols
-            else "No numeric columns available for correlation analysis."
-        )
-        st.warning(message)
-    else:
-        # Restore previous selection
-        prev_corr_key = f"_prev_corr_cols_{key_suffix}"
-        prev_corr = st.session_state.get(prev_corr_key)
-        if prev_corr:
-            # Filter to only valid columns still in the dataset
-            default_corr = [col for col in prev_corr if col in numeric_cols]
-        else:
-            default_corr = numeric_cols[: min(len(numeric_cols), 6)]
-
-        selected = st.multiselect(
-            "Numeric columns",
-            options=numeric_cols,
-            default=default_corr,
-            key=f"trend_corr_cols_{key_suffix}",
-        )
-        st.session_state[prev_corr_key] = selected
-        if len(selected) < 2:
-            st.info("Select at least two columns to compute correlation.")
-        else:
-            matrix = metrics.compute_correlation_heatmap(dataset, columns=selected)
-            if matrix.empty:
-                st.info("Correlation matrix is empty for the selected columns.")
-            else:
-                fig = plots.correlation_heatmap(matrix)
-                st.plotly_chart(fig, use_container_width=True)
-
     shared_controls_ready = len(numeric_cols) >= 2
     if shared_controls_ready:
         st.markdown("#### Column settings (shared)")
@@ -403,48 +368,41 @@ def _render_interactive_explorer(entry, key_suffix: str) -> None:
             else:
                 st.caption("Select rows above to preview thumbnails for the chosen bin combinations.")
 
-    st.markdown("#### Grouped Box Plot")
-    if not shared_controls_ready:
-        st.warning("Need at least two numeric columns to draw the grouped box plot.")
-        return
-
-    if dataset_for_run.empty:
-        if active_run_label:
-            st.warning(f"No dataset rows available for run '{active_run_label}'.")
+    # Correlation Heatmap moved to bottom of page
+    st.markdown("#### Correlation Heatmap")
+    if len(numeric_cols) < 2:
+        message = (
+            "Need at least two numeric columns for correlation analysis."
+            if numeric_cols
+            else "No numeric columns available for correlation analysis."
+        )
+        st.warning(message)
+    else:
+        # Restore previous selection
+        prev_corr_key = f"_prev_corr_cols_{key_suffix}"
+        prev_corr = st.session_state.get(prev_corr_key)
+        if prev_corr:
+            # Filter to only valid columns still in the dataset
+            default_corr = [col for col in prev_corr if col in numeric_cols]
         else:
-            st.warning("No dataset rows available for this visualization.")
-        return
+            default_corr = numeric_cols[: min(len(numeric_cols), 6)]
 
-    group_column = x_column_shared
-    box_data = metrics.prepare_grouped_box_data(
-        dataset_for_run,
-        group_column=group_column,
-        value_column=strata_column_shared,
-        bins=int(x_bins_shared or 8),
-    )
-    if box_data.empty:
-        st.info("No rows available after binning. Adjust your selections.")
-        return
-
-    box_fig = plots.grouped_box_plot(
-        data=box_data,
-        group_column="group_label",
-        value_column="value",
-        title=f"{strata_column_shared} distribution by {group_column} bins",
-    )
-    st.plotly_chart(box_fig, use_container_width=True)
-
-    summary_table = (
-        box_data.groupby("group_label")["value"]
-        .agg(["count", "mean", "median"])
-        .reset_index()
-        .rename(columns={"group_label": f"{group_column} bin"})
-    )
-    summary_table["mean"] = summary_table["mean"].round(3)
-    summary_table["median"] = summary_table["median"].round(3)
-    st.dataframe(summary_table, use_container_width=True)
-    if active_run_label:
-        st.caption(f"Box plot based on rows linked to run '{active_run_label}'.")
+        selected = st.multiselect(
+            "Numeric columns",
+            options=numeric_cols,
+            default=default_corr,
+            key=f"trend_corr_cols_{key_suffix}",
+        )
+        st.session_state[prev_corr_key] = selected
+        if len(selected) < 2:
+            st.info("Select at least two columns to compute correlation.")
+        else:
+            matrix = metrics.compute_correlation_heatmap(dataset, columns=selected)
+            if matrix.empty:
+                st.info("Correlation matrix is empty for the selected columns.")
+            else:
+                fig = plots.correlation_heatmap(matrix)
+                st.plotly_chart(fig, use_container_width=True)
 
 
 def _capture_plotly_events(fig, *, chart_key: str) -> List[Dict]:
