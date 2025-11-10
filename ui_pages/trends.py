@@ -186,10 +186,12 @@ def _render_interactive_explorer(entry, key_suffix: str) -> None:
                 entry=entry,
             )
 
+    st.markdown("#### Stratified Accuracy Grid")
     shared_controls_ready = len(numeric_cols) >= 2
-    if shared_controls_ready:
-        st.markdown("#### Column settings (shared)")
-
+    if not shared_controls_ready:
+        st.warning("Need at least two numeric columns for stratified analysis.")
+    else:
+        # Column settings for Stratified Accuracy Grid
         # Restore X column selection
         prev_x_key = f"_prev_shared_x_col_{key_suffix}"
         prev_x = st.session_state.get(prev_x_key)
@@ -249,16 +251,6 @@ def _render_interactive_explorer(entry, key_suffix: str) -> None:
             key=f"trend_shared_strata_bins_{key_suffix}",
         )
         st.session_state[prev_strata_bins_key] = strata_bins_shared
-    else:
-        x_column_shared = None
-        strata_column_shared = None
-        x_bins_shared = None
-        strata_bins_shared = None
-
-    st.markdown("#### Stratified Accuracy Grid")
-    if not shared_controls_ready:
-        st.warning("Need at least two numeric columns for stratified analysis.")
-    else:
         x_column = x_column_shared
         strata_column = strata_column_shared
         x_bins = x_bins_shared or 12
