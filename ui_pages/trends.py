@@ -358,18 +358,14 @@ def _render_interactive_explorer(entry, key_suffix: str) -> None:
                 st.plotly_chart(accuracy_fig, use_container_width=True)
 
             stats_display = stats_df[
-                ["x_label", "strata_label", "dataset_count", "wrong_count", "accuracy_pct"]
+                ["x_label", "strata_label", "dataset_count", "wrong_count"]
             ].copy()
-            stats_display["accuracy_pct"] = stats_display["accuracy_pct"].apply(
-                lambda value: round(value, 1) if pd.notna(value) else None
-            )
             stats_display.rename(
                 columns={
                     "x_label": f"{x_column} bin",
                     "strata_label": f"{strata_column} bin",
-                    "dataset_count": "dataset_count",
-                    "wrong_count": "flagged_count",
-                    "accuracy_pct": "accuracy_pct",
+                    "dataset_count": "Count",
+                    "wrong_count": "Matched",
                 },
                 inplace=True,
             )
