@@ -375,7 +375,9 @@ def stratified_heatmap(
         hover_lines.append(f"{value_label}: {value_format}")
     if customdata is not None and hover_labels and hover_formats:
         for i, (label, fmt) in enumerate(zip(hover_labels, hover_formats)):
-            hover_lines.append(f"{label}: {fmt.replace('%{customdata}', f'%{{customdata[{i}]}}')}")
+            # Replace %{customdata with %{customdata[i] in the format string
+            formatted = fmt.replace('%{customdata', f'%{{customdata[{i}]')
+            hover_lines.append(f"{label}: {formatted}")
 
     if hover_lines:
         hover_body = "<br>".join(hover_lines)
