@@ -399,6 +399,10 @@ def _render_interactive_explorer(entry, key_suffix: str) -> None:
                     strata_column=strata_column,
                     x_bins=int(x_bins),
                     strata_bins=int(strata_bins),
+                    detail_df=detail_selected if not detail_selected.empty else None,
+                    run_label=active_run_label,
+                    dataset_id=key_suffix,
+                    entry=entry,
                 )
             else:
                 st.caption("Select rows above to preview thumbnails for the chosen bin combinations.")
@@ -733,8 +737,12 @@ def _render_stratified_selection_thumbnails(
     strata_column: str,
     x_bins: int,
     strata_bins: int,
+    detail_df: Optional[pd.DataFrame],
+    run_label: Optional[str],
+    dataset_id: str,
+    entry,
 ) -> None:
-    """Display thumbnails for selected stratified accuracy bins."""
+    """Display matched records table and thumbnails for selected stratified accuracy bins."""
     if not selected_indices:
         return
 
@@ -821,13 +829,126 @@ def _render_stratified_selection_thumbnails(
 
         previews[bin_label] = filenames
 
-    if previews:
-        for label, filenames in previews.items():
-            _render_image_gallery(
-                filenames=filenames,
-                filename_column=filename_column,
-                range_label=label,
-            )
+    # Display matched records table for the selected bins
+    if detail_df is not None and not detail_df.empty and previews:
+        matched = detail_df[detail_df.get("matched") == True]  # noqa: E712
+        x_detail_col = f"data_{x_column}"
+        strata_detail_col = f"data_{strata_column}"
+
+        if x_detail_col in matched.columns and strata_detail_col in matched.columns:
+            # Collect all matched records from selected bins
+            all_flagged_rows = []
+
+            for index in normalized_indices:
+                row = stats_details.iloc[index]
+                x_order = int(row.get("x_order", 0))
+                strata_order = int(row.get("strata_order", 0))
+
+                if x_order >= len(x_edges) - 1 or strata_order >= len(strata_edges) - 1:
+                    continue
+
+                x_start = float(x_edges[x_order])
+                x_end = float(x_edges[x_order + 1])
+                strata_start = float(strata_edges[strata_order])
+                strata_end = float(strata_edges[strata_order + 1])
+
+                x_detail = pd.to_numeric(matched[x_detail_col], errors="coerce")
+                strata_detail = pd.to_numeric(matched[strata_detail_col], errors="coerce")
+
+                detail_mask = x_detail.notna() & strata_detail.notna()
+
+                if x_order == 0:
+                    detail_mask &= x_detail >= x_start
+                else:
+                    detail_mask &= x_detail > x_start
+                detail_mask &= x_detail <= x_end
+
+                if strata_order == 0:
+                    detail_mask &= strata_detail >= strata_start
+                else:
+                    detail_mask &= strata_detail > strata_start
+                detail_mask &= strata_detail <= strata_end
+
+                flagged_rows = matched[detail_mask].copy()
+                all_flagged_rows.append(flagged_rows)
+
+            if all_flagged_rows:
+                combined_flagged = pd.concat(all_flagged_rows, ignore_index=True)
+
+                # Add ground_truth and prediction columns
+                ground_truth_map = entry.ground_truth if entry and entry.ground_truth else {}
+
+                def get_ground_truth(filename):
+                    basename = Path(str(filename)).stem if filename else ""
+                    return ground_truth_map.get(basename, "")
+
+                def get_prediction(label_text):
+                    if not label_text or pd.isna(label_text):
+                        return ""
+                    try:
+                        return text_analysis.parse_prediction_text(str(label_text))
+                    except Exception:
+                        return ""
+
+                combined_flagged["ground_truth"] = combined_flagged["filename"].apply(get_ground_truth)
+                combined_flagged["prediction"] = combined_flagged["label_text"].apply(get_prediction)
+
+                # Only keep run, filename, ground_truth, prediction
+                label_columns = [
+                    col
+                    for col in ["run", "filename", "ground_truth", "prediction"]
+                    if col in combined_flagged.columns
+                ]
+
+                if label_columns:
+                    flagged_preview = combined_flagged[label_columns].drop_duplicates().reset_index(drop=True)
+
+                    flagged_count = len(flagged_preview)
+                    if flagged_count:
+                        caption_run = run_label or "All runs"
+                        st.caption(
+                            f"{flagged_count} matched records from run '{caption_run}' in selected bins."
+                        )
+                        matched_table_key = f"stratified_matched_records_{dataset_id}_{x_column}_{strata_column}"
+                        with st.expander(f"Matched records ({flagged_count})", expanded=False):
+                            st.dataframe(
+                                flagged_preview,
+                                use_container_width=True,
+                                hide_index=True,
+                                on_select="rerun",
+                                key=matched_table_key,
+                            )
+
+                        # Check if user selected rows from matched records table
+                        matched_selection = (
+                            st.session_state.get(matched_table_key, {})
+                            .get("selection", {})
+                            .get("rows", [])
+                        )
+
+                        if matched_selection:
+                            selected_filenames: List[str] = []
+                            for row_idx in matched_selection:
+                                if 0 <= row_idx < len(flagged_preview):
+                                    fname = flagged_preview.iloc[row_idx].get("filename")
+                                    if pd.notna(fname):
+                                        selected_filenames.append(str(fname))
+
+                            if selected_filenames:
+                                _render_image_gallery(
+                                    filenames=selected_filenames,
+                                    filename_column="filename",
+                                    range_label="Selected matched records",
+                                )
+                            else:
+                                st.caption("Select rows in Matched records table to preview thumbnails.")
+                        else:
+                            st.caption("Select rows in Matched records table to preview thumbnails.")
+                    else:
+                        if run_label:
+                            st.caption(f"No matched records from run '{run_label}' in selected bins.")
+                        else:
+                            st.caption("No matched records in selected bins.")
     elif messages:
         for message in messages[:3]:
             st.info(message)
