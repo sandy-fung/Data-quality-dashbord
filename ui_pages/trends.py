@@ -85,18 +85,33 @@ def _render_interactive_explorer(entry, key_suffix: str) -> None:
     if not numeric_cols:
         st.warning("No numeric columns available.")
     else:
+        # Restore previous selection or use first column
+        prev_col_key = f"_prev_numeric_col_{key_suffix}"
+        prev_col = st.session_state.get(prev_col_key)
+        default_col_idx = 0
+        if prev_col and prev_col in numeric_cols:
+            default_col_idx = numeric_cols.index(prev_col)
+
         column = st.selectbox(
             "Numeric column",
             options=numeric_cols,
+            index=default_col_idx,
             key=f"trend_numeric_col_{key_suffix}",
         )
+        st.session_state[prev_col_key] = column
+
+        # Restore previous bins value
+        prev_bins_key = f"_prev_numeric_bins_{key_suffix}"
+        default_bins = st.session_state.get(prev_bins_key, 40)
+
         bins = st.slider(
             "Bins",
             min_value=10,
             max_value=120,
-            value=40,
+            value=default_bins,
             key=f"trend_numeric_bins_{key_suffix}",
         )
+        st.session_state[prev_bins_key] = bins
         hist_data = metrics.compute_numeric_distribution(dataset, column, bins=bins)
         dataset_counts = hist_data["count"]
         new_counts = [0] * len(dataset_counts)
@@ -179,12 +194,22 @@ def _render_interactive_explorer(entry, key_suffix: str) -> None:
         )
         st.warning(message)
     else:
+        # Restore previous selection
+        prev_corr_key = f"_prev_corr_cols_{key_suffix}"
+        prev_corr = st.session_state.get(prev_corr_key)
+        if prev_corr:
+            # Filter to only valid columns still in the dataset
+            default_corr = [col for col in prev_corr if col in numeric_cols]
+        else:
+            default_corr = numeric_cols[: min(len(numeric_cols), 6)]
+
         selected = st.multiselect(
             "Numeric columns",
             options=numeric_cols,
-            default=numeric_cols[: min(len(numeric_cols), 6)],
+            default=default_corr,
             key=f"trend_corr_cols_{key_suffix}",
         )
+        st.session_state[prev_corr_key] = selected
         if len(selected) < 2:
             st.info("Select at least two columns to compute correlation.")
         else:
@@ -198,33 +223,66 @@ def _render_interactive_explorer(entry, key_suffix: str) -> None:
     shared_controls_ready = len(numeric_cols) >= 2
     if shared_controls_ready:
         st.markdown("#### Column settings (shared)")
+
+        # Restore X column selection
+        prev_x_key = f"_prev_shared_x_col_{key_suffix}"
+        prev_x = st.session_state.get(prev_x_key)
+        default_x_idx = 0
+        if prev_x and prev_x in numeric_cols:
+            default_x_idx = numeric_cols.index(prev_x)
+
         x_column_shared = st.selectbox(
             "X column",
             options=numeric_cols,
+            index=default_x_idx,
             key=f"trend_shared_x_col_{key_suffix}",
         )
+        st.session_state[prev_x_key] = x_column_shared
+
+        # Restore X bins value
+        prev_x_bins_key = f"_prev_shared_x_bins_{key_suffix}"
+        default_x_bins = st.session_state.get(prev_x_bins_key, 12)
+
         x_bins_shared = st.slider(
             "X bins",
             min_value=2,
             max_value=60,
-            value=12,
+            value=default_x_bins,
             key=f"trend_shared_x_bins_{key_suffix}",
         )
+        st.session_state[prev_x_bins_key] = x_bins_shared
+
         strata_candidates = [col for col in numeric_cols if col != x_column_shared]
         if not strata_candidates:
             strata_candidates = numeric_cols
+
+        # Restore strata column selection
+        prev_strata_key = f"_prev_shared_strata_col_{key_suffix}"
+        prev_strata = st.session_state.get(prev_strata_key)
+        default_strata_idx = 0
+        if prev_strata and prev_strata in strata_candidates:
+            default_strata_idx = strata_candidates.index(prev_strata)
+
         strata_column_shared = st.selectbox(
             "Strata column",
             options=strata_candidates,
+            index=default_strata_idx,
             key=f"trend_shared_strata_col_{key_suffix}",
         )
+        st.session_state[prev_strata_key] = strata_column_shared
+
+        # Restore strata bins value
+        prev_strata_bins_key = f"_prev_shared_strata_bins_{key_suffix}"
+        default_strata_bins = st.session_state.get(prev_strata_bins_key, 8)
+
         strata_bins_shared = st.slider(
             "Strata bins",
             min_value=2,
             max_value=40,
-            value=8,
+            value=default_strata_bins,
             key=f"trend_shared_strata_bins_{key_suffix}",
         )
+        st.session_state[prev_strata_bins_key] = strata_bins_shared
     else:
         x_column_shared = None
         strata_column_shared = None
