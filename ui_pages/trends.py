@@ -927,21 +927,34 @@ def _render_stratified_selection_thumbnails(
                         )
 
                         if matched_selection:
+                            # Get filenames and match with dataset rows to get correct filename format
                             selected_filenames: List[str] = []
-                            for row_idx in matched_selection:
-                                if 0 <= row_idx < len(flagged_preview):
-                                    fname = flagged_preview.iloc[row_idx].get("filename")
-                                    if pd.notna(fname):
-                                        selected_filenames.append(str(fname))
+                            dataset_filename_col = _resolve_filename_column(dataset)
+
+                            if dataset_filename_col:
+                                # Build a lookup dict for faster matching: basename -> full filename
+                                basename_to_fullname = {}
+                                for ds_fname in dataset[dataset_filename_col].dropna():
+                                    basename = Path(str(ds_fname)).stem
+                                    basename_to_fullname[basename] = str(ds_fname)
+
+                                # Match selected rows
+                                for row_idx in matched_selection:
+                                    if 0 <= row_idx < len(flagged_preview):
+                                        matched_fname = flagged_preview.iloc[row_idx].get("filename")
+                                        if pd.notna(matched_fname):
+                                            matched_basename = Path(str(matched_fname)).stem
+                                            if matched_basename in basename_to_fullname:
+                                                selected_filenames.append(basename_to_fullname[matched_basename])
 
                             if selected_filenames:
                                 _render_image_gallery(
                                     filenames=selected_filenames,
-                                    filename_column="filename",
+                                    filename_column=dataset_filename_col or "filename",
                                     range_label="Selected matched records",
                                 )
                             else:
-                                st.caption("Select rows in Matched records table to preview thumbnails.")
+                                st.caption("No matching dataset files found for selected records.")
                         else:
                             st.caption("Select rows in Matched records table to preview thumbnails.")
                     else:
