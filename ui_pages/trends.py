@@ -329,8 +329,7 @@ def _render_interactive_explorer(entry, key_suffix: str) -> None:
                 text_formatter=format_count,
                 x_title=f"{x_column} bins",
                 y_title=f"{strata_column} bins",
-                value_label="Count",
-                value_format="%{z:.0f}",
+                value_label=None,
                 hover_columns=["accuracy_pct", "wrong_count"],
                 hover_labels=["Accuracy (%)", "Matched"],
                 hover_formats=["%{customdata:.1f}", "%{customdata:.0f}"],
@@ -347,10 +346,9 @@ def _render_interactive_explorer(entry, key_suffix: str) -> None:
                 text_formatter=format_accuracy,
                 x_title=f"{x_column} bins",
                 y_title=f"{strata_column} bins",
-                value_label="Accuracy (%)",
-                value_format="%{z:.1f}",
+                value_label=None,
                 hover_columns=["dataset_count", "wrong_count"],
-                hover_labels=["Dataset Count", "Matched"],
+                hover_labels=["Count", "Matched"],
                 hover_formats=["%{customdata:.0f}", "%{customdata:.0f}"],
             )
             col_count, col_accuracy = st.columns(2)
