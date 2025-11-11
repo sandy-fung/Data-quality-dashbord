@@ -615,12 +615,13 @@ def _batch_import_runs(runs_config: list) -> bool:
 def _resolve_ground_truth(label_dir: str | None, df: pd.DataFrame) -> Tuple[Dict[str, str], str | None]:
     """Resolve ground-truth mapping using label directory and dataset fallback.
 
-    Only includes labels for files that exist in the dataset (matching by basename).
+    Creates a ground truth entry for every image in the dataset. If a label file is
+    missing, the ground truth is set to empty string "" (representing blank/missing label).
     """
     mapping: Dict[str, str] = {}
     resolved_label = _resolve_path(label_dir) if label_dir else None
 
-    # Get set of basenames from dataset for filtering
+    # Get all basenames from dataset
     dataset_basenames: set[str] = set()
     if "filename" in df.columns:
         for filename in df["filename"].dropna():
@@ -631,23 +632,25 @@ def _resolve_ground_truth(label_dir: str | None, df: pd.DataFrame) -> Tuple[Dict
     if resolved_label:
         try:
             all_labels = text_analysis.load_label_directory(Path(resolved_label))
-            # Filter to only include labels that have corresponding images in dataset
-            if dataset_basenames:
-                mapping = {k: v for k, v in all_labels.items() if k in dataset_basenames}
-            else:
-                mapping = all_labels
+            # Create mapping for all images in dataset
+            for basename in dataset_basenames:
+                # Use label text if exists, otherwise empty string (missing label)
+                mapping[basename] = all_labels.get(basename, "")
         except ValueError as exc:
             st.warning(f"Failed to load label directory: {exc}")
-            mapping = {}
+            # If label loading failed, create empty ground truth for all images
+            mapping = {basename: "" for basename in dataset_basenames}
 
     if not mapping and "filename" in df.columns and "plate_text" in df.columns:
         fallback: Dict[str, str] = {}
         for filename, plate_text in df[["filename", "plate_text"]].itertuples(index=False):
-            if not plate_text or not isinstance(plate_text, str):
-                continue
             base_name = Path(str(filename)).stem
             if base_name:
-                fallback[base_name] = plate_text
+                # Use plate_text if valid, otherwise empty string
+                if plate_text and isinstance(plate_text, str):
+                    fallback[base_name] = plate_text
+                else:
+                    fallback[base_name] = ""
         mapping = fallback
 
     return mapping, resolved_label

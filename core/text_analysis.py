@@ -207,14 +207,15 @@ def analyze_text_predictions(
         base_name_source = dataset_filename or label_filename
         base_name = Path(base_name_source).stem
         gt_text = ground_truth_map.get(base_name)
-        if not gt_text:
+        # Skip only if ground truth is not in mapping at all (None)
+        # Empty string "" is valid (represents missing label file)
+        if gt_text is None:
             skipped_no_gt.append(base_name)
             continue
 
         prediction_text = parse_prediction_text(str(row.get("label_text") or ""))
-        if prediction_text == "":
-            skipped_empty_pred.append(base_name)
-            continue
+        # Note: Empty prediction is now processed (not skipped)
+        # because it should be counted as error when ground truth exists
 
         edit_distance, errors = compare_texts(gt_text, prediction_text)
         char_len = max(len(gt_text), 1)
