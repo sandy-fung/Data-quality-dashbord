@@ -613,13 +613,29 @@ def _batch_import_runs(runs_config: list) -> bool:
 
 
 def _resolve_ground_truth(label_dir: str | None, df: pd.DataFrame) -> Tuple[Dict[str, str], str | None]:
-    """Resolve ground-truth mapping using label directory and dataset fallback."""
+    """Resolve ground-truth mapping using label directory and dataset fallback.
+
+    Only includes labels for files that exist in the dataset (matching by basename).
+    """
     mapping: Dict[str, str] = {}
     resolved_label = _resolve_path(label_dir) if label_dir else None
 
+    # Get set of basenames from dataset for filtering
+    dataset_basenames: set[str] = set()
+    if "filename" in df.columns:
+        for filename in df["filename"].dropna():
+            base_name = Path(str(filename)).stem
+            if base_name:
+                dataset_basenames.add(base_name)
+
     if resolved_label:
         try:
-            mapping = text_analysis.load_label_directory(Path(resolved_label))
+            all_labels = text_analysis.load_label_directory(Path(resolved_label))
+            # Filter to only include labels that have corresponding images in dataset
+            if dataset_basenames:
+                mapping = {k: v for k, v in all_labels.items() if k in dataset_basenames}
+            else:
+                mapping = all_labels
         except ValueError as exc:
             st.warning(f"Failed to load label directory: {exc}")
             mapping = {}
