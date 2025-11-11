@@ -130,10 +130,16 @@ def render_sidebar() -> str:
         st.divider()
 
         if st.button("🧹 Reset All Data", type="secondary", width="stretch"):
+            # Clear all datasets first
+            for dataset_id in list(ds_state.list_datasets().keys()):
+                ds_state.delete_dataset(dataset_id)
+            # Clear session state
             st.session_state.clear()
-            init_session_state()
+            # Clear snapshot files
             data_manager.clear_all()
-            st.success("Session cleared")
+            # Reinitialize
+            init_session_state()
+            st.success("All data cleared")
             st.rerun()
 
         dataset = entry.dataset if entry else None
