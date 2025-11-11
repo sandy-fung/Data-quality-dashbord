@@ -181,6 +181,8 @@ def analyze_text_predictions(
                 "plate_accuracy": 0.0,
                 "char_accuracy": 0.0,
                 "total_errors": 0,
+                "total_characters": 0,
+                "wrong_characters": 0,
             },
             "debug_info": {
                 "total_predictions": 0,
@@ -271,6 +273,8 @@ def analyze_text_predictions(
                 "plate_accuracy": 0.0,
                 "char_accuracy": 0.0,
                 "total_errors": 0,
+                "total_characters": 0,
+                "wrong_characters": 0,
             },
             "debug_info": {
                 "total_predictions": len(predictions),
@@ -345,6 +349,8 @@ def analyze_text_predictions(
         "plate_accuracy": plate_accuracy_ratio,
         "char_accuracy": char_accuracy_ratio,
         "total_errors": total_errors,
+        "total_characters": int(total_dataset_characters),
+        "wrong_characters": int(wrong_characters),
     }
 
     debug_info = {
