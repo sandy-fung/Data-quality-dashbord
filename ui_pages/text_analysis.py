@@ -218,7 +218,7 @@ def _render_text_analysis_for_entry(entry, key_suffix: str) -> bool:
             },
         )
         pie_fig.update_layout(legend_title="Error type")
-        st.plotly_chart(pie_fig, use_container_width=True)
+        st.plotly_chart(pie_fig, use_container_width=True, key=f"error_type_pie_{key_suffix}")
 
     st.subheader("Error type breakdown")
     rendered_any = False
@@ -257,7 +257,7 @@ def _render_text_analysis_for_entry(entry, key_suffix: str) -> bool:
                 textinfo="label",
                 hovertemplate="<b>%{label}</b><br>Total: %{value}<br><br>%{customdata[0]}<extra></extra>",
             )
-            st.plotly_chart(pie_fig, use_container_width=True)
+            st.plotly_chart(pie_fig, use_container_width=True, key=f"error_pie_{error_type}_grouped_{key_suffix}")
         else:
             # For delete and insert, keep original pie chart
             summary_df = summary_df.sort_values("count", ascending=False)
@@ -271,7 +271,7 @@ def _render_text_analysis_for_entry(entry, key_suffix: str) -> bool:
                 textinfo="label",
                 hovertemplate="%{label}: %{value}<extra></extra>",
             )
-            st.plotly_chart(pie_fig, use_container_width=True)
+            st.plotly_chart(pie_fig, use_container_width=True, key=f"error_pie_{error_type}_{key_suffix}")
 
         table_df = summary_df.copy()
         table_df[label_column] = table_df.pop("token")

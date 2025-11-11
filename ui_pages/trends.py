@@ -162,7 +162,7 @@ def _render_interactive_explorer(entry, key_suffix: str) -> None:
                 dataset_id=key_suffix,
             )
         else:
-            st.plotly_chart(overlay_fig, use_container_width=True)
+            st.plotly_chart(overlay_fig, use_container_width=True, key=f"numeric_overlay_{key_suffix}")
             st.caption(
                 "Select a range below to preview records. Install `streamlit-plotly-events` to enable bar clicks."
             )
@@ -310,9 +310,9 @@ def _render_interactive_explorer(entry, key_suffix: str) -> None:
             )
             col_count, col_accuracy = st.columns(2)
             with col_count:
-                st.plotly_chart(count_fig, use_container_width=True)
+                st.plotly_chart(count_fig, use_container_width=True, key=f"stratified_count_{key_suffix}")
             with col_accuracy:
-                st.plotly_chart(accuracy_fig, use_container_width=True)
+                st.plotly_chart(accuracy_fig, use_container_width=True, key=f"stratified_accuracy_{key_suffix}")
 
             stats_display = stats_df[
                 ["x_label", "strata_label", "dataset_count", "wrong_count"]
@@ -394,7 +394,7 @@ def _render_interactive_explorer(entry, key_suffix: str) -> None:
                 st.info("Correlation matrix is empty for the selected columns.")
             else:
                 fig = plots.correlation_heatmap(matrix)
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, use_container_width=True, key=f"correlation_heatmap_{key_suffix}")
 
 
 def _capture_plotly_events(fig, *, chart_key: str) -> List[Dict]:
