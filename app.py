@@ -130,16 +130,25 @@ def render_sidebar() -> str:
         st.divider()
 
         if st.button("🧹 Reset All Data", type="secondary", width="stretch"):
-            # Clear all datasets first
+            # Clear Streamlit caches first
+            st.cache_data.clear()
+            st.cache_resource.clear()
+
+            # Clear snapshot files before clearing session state
+            data_manager.clear_all()
+
+            # Clear all datasets
+            ds_state.ensure_dataset_state()
             for dataset_id in list(ds_state.list_datasets().keys()):
                 ds_state.delete_dataset(dataset_id)
-            # Clear session state
+
+            # Clear session state completely
             st.session_state.clear()
-            # Clear snapshot files
-            data_manager.clear_all()
-            # Reinitialize
+
+            # Reinitialize session state with clean slate
             init_session_state()
-            st.success("All data cleared")
+
+            st.success("All data cleared successfully")
             st.rerun()
 
         dataset = entry.dataset if entry else None
