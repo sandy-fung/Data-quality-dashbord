@@ -185,20 +185,17 @@ def _render_text_analysis_for_entry(entry, key_suffix: str) -> bool:
         return False
 
     st.subheader("Overall metrics")
-    col_wrong_plates, col_wrong_char, col_total_char, col_plate_acc, col_char_acc = st.columns(5)
+    col_wrong_plates, col_wrong_char, col_plate_acc, col_char_acc = st.columns(4)
 
     # Wrong plates: 錯誤車牌數 / 總車牌數
     wrong_value = int(metrics.get("wrong", 0))
     total_value = int(metrics.get("total", 0))
     col_wrong_plates.metric("Wrong plates", f"{wrong_value:,} / {total_value:,}")
 
-    # Wrong char: 錯誤字數
+    # Wrong char: 錯誤字數 / 總字數
     wrong_characters = int(metrics.get("wrong_characters", 0))
-    col_wrong_char.metric("Wrong char", f"{wrong_characters:,}")
-
-    # 總字數
     total_characters = int(metrics.get("total_characters", 0))
-    col_total_char.metric("總字數", f"{total_characters:,}")
+    col_wrong_char.metric("Wrong char", f"{wrong_characters:,} / {total_characters:,}")
 
     # Plate accuracy: 保持百分比
     plate_ratio = float(metrics.get("plate_accuracy", 0.0))
@@ -206,8 +203,11 @@ def _render_text_analysis_for_entry(entry, key_suffix: str) -> bool:
     plate_display = f"{plate_ratio * 100:.2f}%"
     col_plate_acc.metric("Plate accuracy", plate_display)
 
-    # Char accuracy: 錯誤字數 / 總字數
-    col_char_acc.metric("Char accuracy", f"{wrong_characters:,} / {total_characters:,}")
+    # Char accuracy: 保持百分比
+    char_ratio = float(metrics.get("char_accuracy", 0.0))
+    char_ratio = max(0.0, min(1.0, char_ratio))
+    char_display = f"{char_ratio * 100:.2f}%"
+    col_char_acc.metric("Char accuracy", char_display)
 
     st.subheader("Error type distribution")
     if type_summary_df.empty or type_summary_df["count"].sum() == 0:
